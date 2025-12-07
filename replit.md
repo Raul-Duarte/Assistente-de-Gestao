@@ -29,8 +29,8 @@ Preferred communication style: Simple, everyday language.
 
 **Key Pages**:
 - Public: Landing, Pricing, About, Tools
-- Authenticated: Dashboard, Artefatos (artifact generation)
-- Admin: Users, Profiles, Plans management
+- Authenticated: Dashboard, Artefatos (artifact generation), Perfil (user profile)
+- Admin: Users, Profiles, Plans, Artefatos Gerados (all generated artifacts with filters)
 
 ### Backend Architecture
 
