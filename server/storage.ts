@@ -42,6 +42,7 @@ export interface IStorage {
 
   // Artifact operations
   getArtifacts(userId: string): Promise<Artifact[]>;
+  getAllArtifacts(): Promise<(Artifact & { user?: User })[]>;
   getArtifact(id: string): Promise<Artifact | undefined>;
   createArtifact(data: InsertArtifact): Promise<Artifact>;
 }
@@ -204,6 +205,19 @@ export class DatabaseStorage implements IStorage {
       .from(artifacts)
       .where(eq(artifacts.userId, userId))
       .orderBy(desc(artifacts.createdAt));
+  }
+
+  async getAllArtifacts(): Promise<(Artifact & { user?: User })[]> {
+    const result = await db
+      .select()
+      .from(artifacts)
+      .leftJoin(users, eq(artifacts.userId, users.id))
+      .orderBy(desc(artifacts.createdAt));
+
+    return result.map((row) => ({
+      ...row.artifacts,
+      user: row.users || undefined,
+    }));
   }
 
   async getArtifact(id: string): Promise<Artifact | undefined> {

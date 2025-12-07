@@ -33,6 +33,7 @@ import {
   Home,
   ChevronUp,
   User,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -64,6 +65,11 @@ const managementItems = [
     title: "Planos",
     url: "/admin/planos",
     icon: Crown,
+  },
+  {
+    title: "Artefatos Gerados",
+    url: "/admin/artefatos",
+    icon: FileText,
   },
 ];
 

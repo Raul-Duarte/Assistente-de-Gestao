@@ -16,6 +16,7 @@ import Artefatos from "@/pages/artefatos";
 import AdminUsers from "@/pages/admin/users";
 import AdminProfiles from "@/pages/admin/profiles";
 import AdminPlans from "@/pages/admin/plans";
+import AdminArtifacts from "@/pages/admin/artifacts";
 import Perfil from "@/pages/perfil";
 import NotFound from "@/pages/not-found";
 
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/admin/usuarios" component={AdminUsers} />
       <Route path="/admin/perfis" component={AdminProfiles} />
       <Route path="/admin/planos" component={AdminPlans} />
+      <Route path="/admin/artefatos" component={AdminArtifacts} />
       <Route path="/perfil" component={Perfil} />
       <Route component={NotFound} />
     </Switch>
