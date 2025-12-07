@@ -83,7 +83,8 @@ export default function Artefatos() {
   const generateMutation = useMutation({
     mutationFn: async (data: { types: ArtifactType[]; transcription: string }) => {
       const response = await apiRequest("POST", "/api/artifacts/generate", data);
-      return response as Artifact[];
+      const artifacts = await response.json();
+      return artifacts as Artifact[];
     },
     onSuccess: (data) => {
       setGeneratedArtifacts(data);
@@ -115,8 +116,13 @@ export default function Artefatos() {
 
   const downloadMutation = useMutation({
     mutationFn: async (artifactId: string) => {
-      const response = await fetch(`/api/artifacts/${artifactId}/pdf`);
-      if (!response.ok) throw new Error("Falha ao baixar PDF");
+      const response = await fetch(`/api/artifacts/${artifactId}/pdf`, {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Falha ao baixar PDF");
+      }
       const blob = await response.blob();
       return { blob, artifactId };
     },
