@@ -1,0 +1,202 @@
+import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
+import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  LayoutDashboard,
+  Users,
+  Shield,
+  Crown,
+  Sparkles,
+  LogOut,
+  Home,
+  ChevronUp,
+} from "lucide-react";
+
+const adminMenuItems = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    title: "Artefatos",
+    url: "/artefatos",
+    icon: Sparkles,
+  },
+];
+
+const managementItems = [
+  {
+    title: "Usuários",
+    url: "/admin/usuarios",
+    icon: Users,
+  },
+  {
+    title: "Perfis",
+    url: "/admin/perfis",
+    icon: Shield,
+  },
+  {
+    title: "Planos",
+    url: "/admin/planos",
+    icon: Crown,
+  },
+];
+
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
+
+export function AdminLayout({ children }: AdminLayoutProps) {
+  const [location] = useLocation();
+  const { user } = useAuth();
+
+  const getInitials = (firstName?: string | null, lastName?: string | null) => {
+    const first = firstName?.charAt(0) || "";
+    const last = lastName?.charAt(0) || "";
+    return (first + last).toUpperCase() || "U";
+  };
+
+  const style = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <Sidebar>
+          <SidebarHeader className="border-b p-4">
+            <a href="/" className="flex items-center gap-2">
+              <Sparkles className="h-6 w-6 text-primary" />
+              <span className="font-semibold text-lg">ArtefatosPro</span>
+            </a>
+          </SidebarHeader>
+
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>Principal</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {adminMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === item.url}
+                        data-testid={`nav-${item.url.replace(/\//g, "-").slice(1)}`}
+                      >
+                        <a href={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupLabel>Administração</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {managementItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === item.url}
+                        data-testid={`nav-${item.url.replace(/\//g, "-").slice(1)}`}
+                      >
+                        <a href={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+
+          <SidebarFooter className="border-t p-2">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <SidebarMenuButton
+                      size="lg"
+                      className="w-full"
+                      data-testid="button-user-menu-sidebar"
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user?.profileImageUrl || undefined} />
+                        <AvatarFallback>
+                          {getInitials(user?.firstName, user?.lastName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col items-start text-left">
+                        <span className="text-sm font-medium truncate max-w-[120px]">
+                          {user?.firstName} {user?.lastName}
+                        </span>
+                        <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                          {user?.email}
+                        </span>
+                      </div>
+                      <ChevronUp className="ml-auto h-4 w-4" />
+                    </SidebarMenuButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" className="w-56">
+                    <DropdownMenuItem asChild>
+                      <a href="/">
+                        <Home className="mr-2 h-4 w-4" />
+                        Página Inicial
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <a href="/api/logout" data-testid="button-logout-sidebar">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sair
+                      </a>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </Sidebar>
+
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between gap-4 px-4 py-3 border-b bg-background">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <ThemeToggle />
+          </header>
+          <main className="flex-1 overflow-auto p-6">{children}</main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}

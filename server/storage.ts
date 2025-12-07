@@ -1,38 +1,196 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import {
+  users,
+  profiles,
+  plans,
+  artifacts,
+  type User,
+  type UpsertUser,
+  type Profile,
+  type InsertProfile,
+  type Plan,
+  type InsertPlan,
+  type Artifact,
+  type InsertArtifact,
+} from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface IStorage {
+  // User operations
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  upsertUser(user: UpsertUser): Promise<User>;
+  getAllUsers(): Promise<(User & { profile?: Profile; plan?: Plan })[]>;
+  updateUser(id: string, data: Partial<UpsertUser>): Promise<User>;
+  getUserPlan(userId: string): Promise<Plan | undefined>;
+  getUserProfile(userId: string): Promise<Profile | undefined>;
+
+  // Profile operations
+  getProfiles(): Promise<Profile[]>;
+  getProfile(id: string): Promise<Profile | undefined>;
+  createProfile(data: InsertProfile): Promise<Profile>;
+  updateProfile(id: string, data: Partial<InsertProfile>): Promise<Profile>;
+  deleteProfile(id: string): Promise<void>;
+
+  // Plan operations
+  getPlans(): Promise<Plan[]>;
+  getPlan(id: string): Promise<Plan | undefined>;
+  getPlanBySlug(slug: string): Promise<Plan | undefined>;
+  createPlan(data: InsertPlan): Promise<Plan>;
+  updatePlan(id: string, data: Partial<InsertPlan>): Promise<Plan>;
+
+  // Artifact operations
+  getArtifacts(userId: string): Promise<Artifact[]>;
+  getArtifact(id: string): Promise<Artifact | undefined>;
+  createArtifact(data: InsertArtifact): Promise<Artifact>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
+  // User operations
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          profileImageUrl: userData.profileImageUrl,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
+
+  async getAllUsers(): Promise<(User & { profile?: Profile; plan?: Plan })[]> {
+    const result = await db
+      .select()
+      .from(users)
+      .leftJoin(profiles, eq(users.profileId, profiles.id))
+      .leftJoin(plans, eq(users.planId, plans.id))
+      .orderBy(desc(users.createdAt));
+
+    return result.map((row) => ({
+      ...row.users,
+      profile: row.profiles || undefined,
+      plan: row.plans || undefined,
+    }));
+  }
+
+  async updateUser(id: string, data: Partial<UpsertUser>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async getUserPlan(userId: string): Promise<Plan | undefined> {
+    const user = await this.getUser(userId);
+    if (!user?.planId) {
+      // Return default free plan
+      const freePlan = await this.getPlanBySlug("free");
+      return freePlan;
+    }
+    return this.getPlan(user.planId);
+  }
+
+  async getUserProfile(userId: string): Promise<Profile | undefined> {
+    const user = await this.getUser(userId);
+    if (!user?.profileId) {
+      // Return default client profile
+      const [clientProfile] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.name, "Cliente"));
+      return clientProfile;
+    }
+    return this.getProfile(user.profileId);
+  }
+
+  // Profile operations
+  async getProfiles(): Promise<Profile[]> {
+    return db.select().from(profiles).orderBy(profiles.name);
+  }
+
+  async getProfile(id: string): Promise<Profile | undefined> {
+    const [profile] = await db.select().from(profiles).where(eq(profiles.id, id));
+    return profile;
+  }
+
+  async createProfile(data: InsertProfile): Promise<Profile> {
+    const [profile] = await db.insert(profiles).values(data).returning();
+    return profile;
+  }
+
+  async updateProfile(id: string, data: Partial<InsertProfile>): Promise<Profile> {
+    const [profile] = await db
+      .update(profiles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(profiles.id, id))
+      .returning();
+    return profile;
+  }
+
+  async deleteProfile(id: string): Promise<void> {
+    await db.delete(profiles).where(eq(profiles.id, id));
+  }
+
+  // Plan operations
+  async getPlans(): Promise<Plan[]> {
+    return db.select().from(plans).orderBy(plans.price);
+  }
+
+  async getPlan(id: string): Promise<Plan | undefined> {
+    const [plan] = await db.select().from(plans).where(eq(plans.id, id));
+    return plan;
+  }
+
+  async getPlanBySlug(slug: string): Promise<Plan | undefined> {
+    const [plan] = await db.select().from(plans).where(eq(plans.slug, slug));
+    return plan;
+  }
+
+  async createPlan(data: InsertPlan): Promise<Plan> {
+    const [plan] = await db.insert(plans).values(data).returning();
+    return plan;
+  }
+
+  async updatePlan(id: string, data: Partial<InsertPlan>): Promise<Plan> {
+    const [plan] = await db
+      .update(plans)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(plans.id, id))
+      .returning();
+    return plan;
+  }
+
+  // Artifact operations
+  async getArtifacts(userId: string): Promise<Artifact[]> {
+    return db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.userId, userId))
+      .orderBy(desc(artifacts.createdAt));
+  }
+
+  async getArtifact(id: string): Promise<Artifact | undefined> {
+    const [artifact] = await db.select().from(artifacts).where(eq(artifacts.id, id));
+    return artifact;
+  }
+
+  async createArtifact(data: InsertArtifact): Promise<Artifact> {
+    const [artifact] = await db.insert(artifacts).values(data).returning();
+    return artifact;
+  }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
