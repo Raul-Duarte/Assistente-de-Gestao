@@ -89,7 +89,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       <div className="flex h-screen w-full">
         <Sidebar>
           <SidebarHeader className="border-b p-4">
-            <a href="/" className="flex items-center gap-2">
+            <a href="/" className="flex items-center gap-2" data-testid="link-sidebar-logo">
               <Sparkles className="h-6 w-6 text-primary" />
               <span className="font-semibold text-lg">ArtefatosPro</span>
             </a>
@@ -170,7 +170,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent side="top" className="w-56">
                     <DropdownMenuItem asChild>
-                      <a href="/">
+                      <a href="/" data-testid="link-dropdown-home">
                         <Home className="mr-2 h-4 w-4" />
                         Página Inicial
                       </a>
