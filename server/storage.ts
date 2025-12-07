@@ -18,7 +18,9 @@ import { eq, desc, and } from "drizzle-orm";
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  createManualUser(data: { email: string; firstName?: string; lastName?: string; profileId?: string; planId?: string }): Promise<User>;
   getAllUsers(): Promise<(User & { profile?: Profile; plan?: Plan })[]>;
   updateUser(id: string, data: Partial<UpsertUser>): Promise<User>;
   getUserPlan(userId: string): Promise<Plan | undefined>;
@@ -48,6 +50,28 @@ export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createManualUser(data: { email: string; firstName?: string; lastName?: string; profileId?: string; planId?: string }): Promise<User> {
+    const id = `manual_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const [user] = await db
+      .insert(users)
+      .values({
+        id,
+        email: data.email,
+        firstName: data.firstName || null,
+        lastName: data.lastName || null,
+        profileId: data.profileId || null,
+        planId: data.planId || null,
+        isActive: true,
+      })
+      .returning();
     return user;
   }
 

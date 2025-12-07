@@ -21,6 +21,7 @@ import {
   Download,
   Sparkles,
   Lock,
+  FileArchive,
 } from "lucide-react";
 import { ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType, type Plan, type Artifact } from "@shared/schema";
 
@@ -145,6 +146,49 @@ export default function Artefatos() {
       });
     },
   });
+
+  const downloadAllMutation = useMutation({
+    mutationFn: async (artifactIds: string[]) => {
+      const response = await fetch("/api/artifacts/download-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artifactIds }),
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Falha ao baixar PDFs");
+      }
+      const blob = await response.blob();
+      return blob;
+    },
+    onSuccess: (blob) => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `artefatos_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        title: "Download concluído",
+        description: "Todos os artefatos foram baixados com sucesso.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao baixar PDFs",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDownloadAll = () => {
+    const artifactIds = generatedArtifacts.map(a => a.id);
+    downloadAllMutation.mutate(artifactIds);
+  };
 
   const handleTypeToggle = (type: ArtifactType) => {
     setSelectedTypes((prev) =>
@@ -338,10 +382,34 @@ export default function Artefatos() {
         {generatedArtifacts.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Artefatos Gerados</CardTitle>
-              <CardDescription>
-                Baixe os documentos gerados em formato PDF
-              </CardDescription>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle>Artefatos Gerados</CardTitle>
+                  <CardDescription>
+                    Baixe os documentos gerados em formato PDF
+                  </CardDescription>
+                </div>
+                {generatedArtifacts.length > 1 && (
+                  <Button
+                    variant="default"
+                    onClick={handleDownloadAll}
+                    disabled={downloadAllMutation.isPending}
+                    data-testid="button-download-all"
+                  >
+                    {downloadAllMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Baixando...
+                      </>
+                    ) : (
+                      <>
+                        <FileArchive className="mr-2 h-4 w-4" />
+                        Baixar Todos ({generatedArtifacts.length})
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">

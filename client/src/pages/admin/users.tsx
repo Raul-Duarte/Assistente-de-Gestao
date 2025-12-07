@@ -42,6 +42,7 @@ import {
   Search,
   UserCheck,
   UserX,
+  Plus,
 } from "lucide-react";
 import type { User, Profile, Plan } from "@shared/schema";
 
@@ -50,11 +51,29 @@ interface UserWithRelations extends User {
   plan?: Plan;
 }
 
+interface NewUserForm {
+  email: string;
+  firstName: string;
+  lastName: string;
+  profileId: string;
+  planId: string;
+}
+
+const initialNewUserForm: NewUserForm = {
+  email: "",
+  firstName: "",
+  lastName: "",
+  profileId: "",
+  planId: "",
+};
+
 export default function AdminUsers() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [editingUser, setEditingUser] = useState<UserWithRelations | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newUserForm, setNewUserForm] = useState<NewUserForm>(initialNewUserForm);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -113,6 +132,55 @@ export default function AdminUsers() {
     },
   });
 
+  const createUserMutation = useMutation({
+    mutationFn: async (data: NewUserForm) => {
+      const response = await apiRequest("POST", "/api/admin/users", {
+        email: data.email,
+        firstName: data.firstName || undefined,
+        lastName: data.lastName || undefined,
+        profileId: data.profileId || undefined,
+        planId: data.planId || undefined,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Usuário criado com sucesso!" });
+      setIsCreateOpen(false);
+      setNewUserForm(initialNewUserForm);
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Sessão expirada",
+          description: "Fazendo login novamente...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Erro ao criar usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateUser = () => {
+    if (!newUserForm.email.trim()) {
+      toast({
+        title: "Email obrigatório",
+        description: "Informe o email do usuário.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createUserMutation.mutate(newUserForm);
+  };
+
   const filteredUsers = users?.filter((user) => {
     const searchLower = searchQuery.toLowerCase();
     return (
@@ -162,7 +230,7 @@ export default function AdminUsers() {
                   {users?.length || 0} usuários cadastrados
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -173,6 +241,119 @@ export default function AdminUsers() {
                     data-testid="input-search-users"
                   />
                 </div>
+                <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-new-user">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Novo Usuário
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Novo Usuário</DialogTitle>
+                      <DialogDescription>
+                        Cadastre um novo usuário no sistema
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="usuario@exemplo.com"
+                          value={newUserForm.email}
+                          onChange={(e) => setNewUserForm(prev => ({ ...prev, email: e.target.value }))}
+                          data-testid="input-new-user-email"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="firstName">Nome</Label>
+                          <Input
+                            id="firstName"
+                            placeholder="Nome"
+                            value={newUserForm.firstName}
+                            onChange={(e) => setNewUserForm(prev => ({ ...prev, firstName: e.target.value }))}
+                            data-testid="input-new-user-firstname"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="lastName">Sobrenome</Label>
+                          <Input
+                            id="lastName"
+                            placeholder="Sobrenome"
+                            value={newUserForm.lastName}
+                            onChange={(e) => setNewUserForm(prev => ({ ...prev, lastName: e.target.value }))}
+                            data-testid="input-new-user-lastname"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Perfil</Label>
+                        <Select
+                          value={newUserForm.profileId}
+                          onValueChange={(value) => setNewUserForm(prev => ({ ...prev, profileId: value }))}
+                        >
+                          <SelectTrigger data-testid="select-new-user-profile">
+                            <SelectValue placeholder="Selecione um perfil" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {profiles?.map((profile) => (
+                              <SelectItem key={profile.id} value={profile.id}>
+                                {profile.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Plano</Label>
+                        <Select
+                          value={newUserForm.planId}
+                          onValueChange={(value) => setNewUserForm(prev => ({ ...prev, planId: value }))}
+                        >
+                          <SelectTrigger data-testid="select-new-user-plan">
+                            <SelectValue placeholder="Selecione um plano" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {plans?.map((plan) => (
+                              <SelectItem key={plan.id} value={plan.id}>
+                                {plan.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setIsCreateOpen(false);
+                          setNewUserForm(initialNewUserForm);
+                        }}
+                        data-testid="button-cancel-create"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        onClick={handleCreateUser}
+                        disabled={createUserMutation.isPending}
+                        data-testid="button-save-new-user"
+                      >
+                        {createUserMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Criando...
+                          </>
+                        ) : (
+                          "Criar Usuário"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
           </CardHeader>

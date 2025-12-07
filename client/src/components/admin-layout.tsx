@@ -32,7 +32,9 @@ import {
   LogOut,
   Home,
   ChevronUp,
+  User,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const adminMenuItems = [
   {
@@ -142,50 +144,52 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </SidebarContent>
 
           <SidebarFooter className="border-t p-2">
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <SidebarMenuButton
-                      size="lg"
-                      className="w-full"
-                      data-testid="button-user-menu-sidebar"
-                    >
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={user?.profileImageUrl || undefined} />
-                        <AvatarFallback>
-                          {getInitials(user?.firstName, user?.lastName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col items-start text-left">
-                        <span className="text-sm font-medium truncate max-w-[120px]">
-                          {user?.firstName} {user?.lastName}
-                        </span>
-                        <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-                          {user?.email}
-                        </span>
-                      </div>
-                      <ChevronUp className="ml-auto h-4 w-4" />
-                    </SidebarMenuButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent side="top" className="w-56">
-                    <DropdownMenuItem asChild>
-                      <a href="/" data-testid="link-dropdown-home">
-                        <Home className="mr-2 h-4 w-4" />
-                        Página Inicial
-                      </a>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <a href="/api/logout" data-testid="button-logout-sidebar">
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Sair
-                      </a>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </SidebarMenuItem>
-            </SidebarMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 h-auto py-2 px-3"
+                  data-testid="button-user-menu-sidebar"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user?.profileImageUrl || undefined} />
+                    <AvatarFallback>
+                      {getInitials(user?.firstName, user?.lastName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col items-start text-left flex-1 min-w-0">
+                    <span className="text-sm font-medium truncate w-full">
+                      {user?.firstName} {user?.lastName}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate w-full">
+                      {user?.email}
+                    </span>
+                  </div>
+                  <ChevronUp className="h-4 w-4 shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-56">
+                <DropdownMenuItem asChild>
+                  <a href="/perfil" className="cursor-pointer" data-testid="link-dropdown-profile">
+                    <User className="mr-2 h-4 w-4" />
+                    Meu Perfil
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/" className="cursor-pointer" data-testid="link-dropdown-home">
+                    <Home className="mr-2 h-4 w-4" />
+                    Página Inicial
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a href="/api/logout" className="cursor-pointer" data-testid="button-logout-sidebar">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sair
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarFooter>
         </Sidebar>
 

@@ -127,6 +127,15 @@ export const insertArtifactSchema = createInsertSchema(artifacts).omit({
   createdAt: true,
 });
 
+// Schema for manual user creation by admin
+export const createManualUserSchema = z.object({
+  email: z.string().email("Email inválido"),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  profileId: z.string().optional(),
+  planId: z.string().optional(),
+});
+
 // Types
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;

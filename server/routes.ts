@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { generateArtifactContent } from "./openai";
-import { insertProfileSchema, insertPlanSchema, ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType } from "@shared/schema";
+import { insertProfileSchema, insertPlanSchema, createManualUserSchema, ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType } from "@shared/schema";
 import { z } from "zod";
 import PDFDocument from "pdfkit";
 
@@ -168,6 +168,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Download multiple artifacts as a combined PDF
+  app.post("/api/artifacts/download-all", isAuthenticated, async (req: any, res) => {
+    try {
+      const { artifactIds } = req.body;
+      const userId = req.user.claims.sub;
+
+      if (!artifactIds || !Array.isArray(artifactIds) || artifactIds.length === 0) {
+        return res.status(400).json({ message: "Forneça os IDs dos artefatos" });
+      }
+
+      // Fetch all artifacts and verify ownership
+      const artifacts = [];
+      for (const id of artifactIds) {
+        const artifact = await storage.getArtifact(id);
+        if (artifact && artifact.userId === userId) {
+          artifacts.push(artifact);
+        }
+      }
+
+      if (artifacts.length === 0) {
+        return res.status(404).json({ message: "Nenhum artefato encontrado" });
+      }
+
+      // Generate combined PDF
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="artefatos_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf"`);
+        res.send(pdfBuffer);
+      });
+
+      // Title page
+      doc.fontSize(28).font("Helvetica-Bold").text("Artefatos Gerados", { align: "center" });
+      doc.moveDown();
+      doc.fontSize(12).font("Helvetica").fillColor("#666666")
+        .text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, { align: "center" });
+      doc.moveDown();
+      doc.text(`Total de documentos: ${artifacts.length}`, { align: "center" });
+
+      // Each artifact
+      for (let i = 0; i < artifacts.length; i++) {
+        const artifact = artifacts[i];
+        
+        doc.addPage();
+        
+        doc.fontSize(20).font("Helvetica-Bold").fillColor("#000000")
+          .text(artifact.title, { align: "center" });
+        doc.moveDown();
+        
+        doc.fontSize(10).font("Helvetica").fillColor("#666666")
+          .text(`Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}`, { align: "center" });
+        doc.moveDown(2);
+
+        // Convert markdown-like content to simple text
+        const content = artifact.content
+          .replace(/^### (.+)$/gm, "\n$1\n")
+          .replace(/^## (.+)$/gm, "\n$1\n")
+          .replace(/^# (.+)$/gm, "\n$1\n")
+          .replace(/\*\*(.+?)\*\*/g, "$1")
+          .replace(/\*(.+?)\*/g, "$1")
+          .replace(/^- /gm, "• ");
+
+        doc.fontSize(11).font("Helvetica").fillColor("#000000").text(content, {
+          align: "left",
+          lineGap: 4,
+        });
+      }
+
+      doc.end();
+    } catch (error) {
+      console.error("Error generating combined PDF:", error);
+      res.status(500).json({ message: "Failed to generate PDF" });
+    }
+  });
+
   // Admin routes - Users
   app.get("/api/admin/users", isAuthenticated, async (req: any, res) => {
     try {
@@ -202,6 +281,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating user:", error);
       res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.post("/api/admin/users", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      
+      if (profile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      // Validate request body with manual user schema
+      const validationResult = createManualUserSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ message: validationResult.error.errors[0].message });
+      }
+
+      const { email, firstName, lastName, profileId, planId } = validationResult.data;
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "Já existe um usuário com este email" });
+      }
+
+      // Validate profileId exists if provided
+      if (profileId) {
+        const existingProfile = await storage.getProfile(profileId);
+        if (!existingProfile) {
+          return res.status(400).json({ message: "Perfil não encontrado" });
+        }
+      }
+
+      // Validate planId exists if provided
+      if (planId) {
+        const existingPlan = await storage.getPlan(planId);
+        if (!existingPlan) {
+          return res.status(400).json({ message: "Plano não encontrado" });
+        }
+      }
+
+      const user = await storage.createManualUser({ email, firstName, lastName, profileId, planId });
+      res.json(user);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: "Failed to create user" });
     }
   });
 
