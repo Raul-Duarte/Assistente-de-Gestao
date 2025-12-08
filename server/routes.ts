@@ -6,6 +6,7 @@ import { generateArtifactContent } from "./openai";
 import { insertProfileSchema, insertPlanSchema, createManualUserSchema, ARTIFACT_TYPES } from "@shared/schema";
 import { z } from "zod";
 import PDFDocument from "pdfkit";
+import mammoth from "mammoth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -99,21 +100,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (template.type === 'text' && template.content) {
             templateContent = template.content;
           } else if (template.type === 'file' && template.fileData) {
-            // Decode file content for text-based files
+            // Decode file content based on MIME type
             const textMimeTypes = [
               'text/plain',
               'text/markdown',
               'text/html',
               'application/json',
             ];
+            const docxMimeTypes = [
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'application/msword',
+            ];
+            
             if (template.mimeType && textMimeTypes.includes(template.mimeType)) {
               try {
                 templateContent = Buffer.from(template.fileData, 'base64').toString('utf-8');
               } catch {
                 templateContent = `[Arquivo de referência: ${template.fileName}]`;
               }
+            } else if (template.mimeType && docxMimeTypes.includes(template.mimeType)) {
+              // Extract text from Word documents using mammoth
+              try {
+                const fileBuffer = Buffer.from(template.fileData, 'base64');
+                const result = await mammoth.extractRawText({ buffer: fileBuffer });
+                templateContent = result.value;
+                if (!templateContent || templateContent.trim().length === 0) {
+                  templateContent = `[Template Word: ${template.fileName}]\n\nNota: Use o formato e estrutura típicos deste documento como referência.`;
+                }
+              } catch (err) {
+                console.error("Error extracting text from Word document:", err);
+                templateContent = `[Template Word: ${template.fileName}]\n\nNota: Use o formato e estrutura típicos de um documento Word como referência para organizar a saída.`;
+              }
             } else {
-              // For binary files like PDF/Word, provide filename as reference
+              // For other binary files like PDF, provide filename as reference
               templateContent = `[Template de arquivo: ${template.fileName}]\n\nNota: Use o formato e estrutura típicos de um documento "${template.fileName}" como referência para organizar a saída.`;
             }
           }
