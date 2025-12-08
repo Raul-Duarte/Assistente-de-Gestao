@@ -35,12 +35,19 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Loader2,
   Search,
   Plus,
   Play,
   XCircle,
+  Filter,
 } from "lucide-react";
 import type { Client, Plan, Subscription } from "@shared/schema";
 
@@ -69,6 +76,7 @@ export default function AdminSubscriptions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState<SubscriptionForm>(initialForm);
+  const [selectedPlanFilters, setSelectedPlanFilters] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -82,6 +90,13 @@ export default function AdminSubscriptions() {
       }, 500);
     }
   }, [isAuthenticated, authLoading, toast]);
+
+  // Initialize plan filters with all plans selected by default
+  useEffect(() => {
+    if (plans && plans.length > 0 && selectedPlanFilters.length === 0) {
+      setSelectedPlanFilters(plans.map(p => p.id));
+    }
+  }, [plans, selectedPlanFilters.length]);
 
   const { data: subscriptions, isLoading } = useQuery<SubscriptionWithRelations[]>({
     queryKey: ["/api/admin/subscriptions"],
@@ -176,12 +191,33 @@ export default function AdminSubscriptions() {
     createMutation.mutate(form);
   };
 
+  const togglePlanFilter = (planId: string) => {
+    setSelectedPlanFilters(prev =>
+      prev.includes(planId)
+        ? prev.filter(id => id !== planId)
+        : [...prev, planId]
+    );
+  };
+
+  const selectAllPlans = () => {
+    if (plans) {
+      setSelectedPlanFilters(plans.map(p => p.id));
+    }
+  };
+
+  const clearAllPlans = () => {
+    setSelectedPlanFilters([]);
+  };
+
   const filteredSubscriptions = subscriptions?.filter((sub) => {
     const searchLower = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = (
       sub.client?.name.toLowerCase().includes(searchLower) ||
       sub.plan?.name.toLowerCase().includes(searchLower)
     );
+    const matchesPlanFilter = selectedPlanFilters.length === 0 || 
+      (sub.planId && selectedPlanFilters.includes(sub.planId));
+    return matchesSearch && matchesPlanFilter;
   });
 
   const formatDate = (date: Date | string | null) => {
@@ -254,6 +290,62 @@ export default function AdminSubscriptions() {
                     data-testid="input-search-subscriptions"
                   />
                 </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-plan-filter">
+                      <Filter className="mr-2 h-4 w-4" />
+                      Filtrar Planos
+                      {selectedPlanFilters.length > 0 && plans && selectedPlanFilters.length < plans.length && (
+                        <Badge variant="secondary" className="ml-2">
+                          {selectedPlanFilters.length}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56" align="start">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">Planos</span>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={selectAllPlans}
+                            data-testid="button-select-all-plans"
+                          >
+                            Todos
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={clearAllPlans}
+                            data-testid="button-clear-plans"
+                          >
+                            Limpar
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {plans?.map((plan) => (
+                          <div key={plan.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`plan-filter-${plan.id}`}
+                              checked={selectedPlanFilters.includes(plan.id)}
+                              onCheckedChange={() => togglePlanFilter(plan.id)}
+                              data-testid={`checkbox-plan-${plan.slug}`}
+                            />
+                            <label
+                              htmlFor={`plan-filter-${plan.id}`}
+                              className="text-sm cursor-pointer flex-1"
+                            >
+                              {plan.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                   <DialogTrigger asChild>
                     <Button data-testid="button-new-subscription">

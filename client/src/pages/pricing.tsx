@@ -156,7 +156,7 @@ export default function Pricing() {
                       asChild
                       data-testid={`button-select-${plan.slug}`}
                     >
-                      <a href="/api/login">Começar com {plan.name}</a>
+                      <a href={`/api/login?plan=${plan.slug}`}>Começar com {plan.name}</a>
                     </Button>
                   </CardContent>
                 </Card>

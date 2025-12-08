@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -6,6 +6,13 @@ import { AdminLayout } from "@/components/admin-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -20,8 +27,9 @@ import {
   AlertTriangle,
   TrendingUp,
   DollarSign,
+  Filter,
 } from "lucide-react";
-import type { Client } from "@shared/schema";
+import type { Client, Plan } from "@shared/schema";
 
 interface FinancialReport {
   byMonth: Record<string, {
@@ -46,6 +54,7 @@ interface ClientReport {
 export default function AdminReports() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  const [selectedPlanFilters, setSelectedPlanFilters] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -59,6 +68,36 @@ export default function AdminReports() {
       }, 500);
     }
   }, [isAuthenticated, authLoading, toast]);
+
+  const { data: plans } = useQuery<Plan[]>({
+    queryKey: ["/api/admin/plans"],
+    enabled: isAuthenticated,
+  });
+
+  // Initialize plan filters with all plans selected by default
+  useEffect(() => {
+    if (plans && plans.length > 0 && selectedPlanFilters.length === 0) {
+      setSelectedPlanFilters(plans.map(p => p.id));
+    }
+  }, [plans, selectedPlanFilters.length]);
+
+  const togglePlanFilter = (planId: string) => {
+    setSelectedPlanFilters(prev =>
+      prev.includes(planId)
+        ? prev.filter(id => id !== planId)
+        : [...prev, planId]
+    );
+  };
+
+  const selectAllPlans = () => {
+    if (plans) {
+      setSelectedPlanFilters(plans.map(p => p.id));
+    }
+  };
+
+  const clearAllPlans = () => {
+    setSelectedPlanFilters([]);
+  };
 
   const { data: activeClients, isLoading: loadingActive } = useQuery<ClientReport>({
     queryKey: ["/api/admin/reports/active-clients"],
