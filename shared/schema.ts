@@ -63,6 +63,20 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Templates table for storing document templates
+export const templates = pgTable("templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  description: varchar("description", { length: 255 }).notNull(),
+  type: varchar("type", { length: 20 }).notNull(), // 'text' or 'file'
+  content: text("content"), // For text templates
+  fileName: varchar("file_name", { length: 255 }), // For file templates
+  fileData: text("file_data"), // Base64 encoded file content
+  mimeType: varchar("mime_type", { length: 100 }),
+  fileSize: integer("file_size"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Artifacts table for storing generated documents
 export const artifacts = pgTable("artifacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -71,6 +85,7 @@ export const artifacts = pgTable("artifacts", {
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content").notNull(),
   transcription: text("transcription"),
+  templateId: varchar("template_id").references(() => templates.id),
   status: varchar("status", { length: 20 }).default("completed"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -86,6 +101,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [plans.id],
   }),
   artifacts: many(artifacts),
+  templates: many(templates),
 }));
 
 export const profilesRelations = relations(profiles, ({ many }) => ({
@@ -101,6 +117,18 @@ export const artifactsRelations = relations(artifacts, ({ one }) => ({
     fields: [artifacts.userId],
     references: [users.id],
   }),
+  template: one(templates, {
+    fields: [artifacts.templateId],
+    references: [templates.id],
+  }),
+}));
+
+export const templatesRelations = relations(templates, ({ one, many }) => ({
+  user: one(users, {
+    fields: [templates.userId],
+    references: [users.id],
+  }),
+  artifacts: many(artifacts),
 }));
 
 // Insert schemas
@@ -127,6 +155,11 @@ export const insertArtifactSchema = createInsertSchema(artifacts).omit({
   createdAt: true,
 });
 
+export const insertTemplateSchema = createInsertSchema(templates).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Schema for manual user creation by admin
 export const createManualUserSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -149,6 +182,9 @@ export type UpsertUser = typeof users.$inferInsert;
 
 export type Artifact = typeof artifacts.$inferSelect;
 export type InsertArtifact = z.infer<typeof insertArtifactSchema>;
+
+export type Template = typeof templates.$inferSelect;
+export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 
 // Artifact types enum
 export const ARTIFACT_TYPES = {

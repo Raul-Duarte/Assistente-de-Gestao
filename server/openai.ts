@@ -63,10 +63,16 @@ Seja objetivo e profissional. Extraia apenas informações presentes na transcri
 
 export async function generateArtifactContent(
   type: ArtifactType,
-  transcription: string
+  transcription: string,
+  templateContent?: string
 ): Promise<string> {
-  const systemPrompt = systemPrompts[type];
+  let systemPrompt = systemPrompts[type];
   const typeName = ARTIFACT_TYPE_LABELS[type];
+
+  // Append template instructions if provided
+  if (templateContent) {
+    systemPrompt += `\n\nIMPORTANTE: Utilize o seguinte template/formato como referência para estruturar sua resposta:\n\n${templateContent}`;
+  }
 
   try {
     const response = await openai.chat.completions.create({

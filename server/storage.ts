@@ -3,6 +3,7 @@ import {
   profiles,
   plans,
   artifacts,
+  templates,
   type User,
   type UpsertUser,
   type Profile,
@@ -11,6 +12,8 @@ import {
   type InsertPlan,
   type Artifact,
   type InsertArtifact,
+  type Template,
+  type InsertTemplate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -45,6 +48,12 @@ export interface IStorage {
   getAllArtifacts(): Promise<(Artifact & { user?: User })[]>;
   getArtifact(id: string): Promise<Artifact | undefined>;
   createArtifact(data: InsertArtifact): Promise<Artifact>;
+
+  // Template operations
+  getTemplates(userId: string): Promise<Template[]>;
+  getTemplate(id: string): Promise<Template | undefined>;
+  createTemplate(data: InsertTemplate): Promise<Template>;
+  deleteTemplate(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -228,6 +237,29 @@ export class DatabaseStorage implements IStorage {
   async createArtifact(data: InsertArtifact): Promise<Artifact> {
     const [artifact] = await db.insert(artifacts).values(data).returning();
     return artifact;
+  }
+
+  // Template operations
+  async getTemplates(userId: string): Promise<Template[]> {
+    return db
+      .select()
+      .from(templates)
+      .where(eq(templates.userId, userId))
+      .orderBy(desc(templates.createdAt));
+  }
+
+  async getTemplate(id: string): Promise<Template | undefined> {
+    const [template] = await db.select().from(templates).where(eq(templates.id, id));
+    return template;
+  }
+
+  async createTemplate(data: InsertTemplate): Promise<Template> {
+    const [template] = await db.insert(templates).values(data).returning();
+    return template;
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    await db.delete(templates).where(eq(templates.id, id));
   }
 }
 

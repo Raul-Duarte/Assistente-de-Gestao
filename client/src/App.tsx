@@ -14,6 +14,7 @@ import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Artefatos from "@/pages/artefatos";
 import MeusArtefatos from "@/pages/meus-artefatos";
+import Templates from "@/pages/templates";
 import AdminUsers from "@/pages/admin/users";
 import AdminProfiles from "@/pages/admin/profiles";
 import AdminPlans from "@/pages/admin/plans";
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/artefatos" component={Artefatos} />
       <Route path="/meus-artefatos" component={MeusArtefatos} />
+      <Route path="/templates" component={Templates} />
       <Route path="/admin/usuarios" component={AdminUsers} />
       <Route path="/admin/perfis" component={AdminProfiles} />
       <Route path="/admin/planos" component={AdminPlans} />

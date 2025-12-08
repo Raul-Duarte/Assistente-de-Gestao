@@ -35,6 +35,7 @@ import {
   ChevronUp,
   User,
   FileText,
+  FileStack,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Profile } from "@shared/schema";
@@ -54,6 +55,11 @@ const mainMenuItems = [
     title: "Meus Artefatos",
     url: "/meus-artefatos",
     icon: FileText,
+  },
+  {
+    title: "Templates",
+    url: "/templates",
+    icon: FileStack,
   },
 ];
 

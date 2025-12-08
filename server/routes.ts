@@ -65,12 +65,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ARTIFACT_TYPES.CRITICAL_POINTS,
     ])),
     transcription: z.string().min(10, "Transcrição muito curta"),
+    templateId: z.string().optional(),
   });
 
   app.post("/api/artifacts/generate", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { types, transcription } = generateArtifactsSchema.parse(req.body);
+      const { types, transcription, templateId } = generateArtifactsSchema.parse(req.body);
 
       // Check user plan access
       const plan = await storage.getUserPlan(userId);
@@ -85,10 +86,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Get template content if templateId is provided
+      let templateContent: string | undefined;
+      if (templateId) {
+        const template = await storage.getTemplate(templateId);
+        if (template && template.userId === userId) {
+          if (template.type === 'text' && template.content) {
+            templateContent = template.content;
+          } else if (template.type === 'file' && template.fileData) {
+            templateContent = `[Arquivo de referência: ${template.fileName}]`;
+          }
+        }
+      }
+
       const generatedArtifacts = [];
 
       for (const type of accessibleTypes) {
-        const content = await generateArtifactContent(type as ArtifactType, transcription);
+        const content = await generateArtifactContent(type as ArtifactType, transcription, templateContent);
         const title = `${ARTIFACT_TYPE_LABELS[type as ArtifactType]} - ${new Date().toLocaleDateString("pt-BR")}`;
 
         const artifact = await storage.createArtifact({
@@ -97,6 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title,
           content,
           transcription,
+          templateId: templateId || null,
           status: "completed",
         });
 
@@ -464,6 +479,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating plan:", error);
       res.status(500).json({ message: "Failed to update plan" });
+    }
+  });
+
+  // Template routes
+  app.get("/api/templates", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const templates = await storage.getTemplates(userId);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching templates:", error);
+      res.status(500).json({ message: "Failed to fetch templates" });
+    }
+  });
+
+  app.get("/api/templates/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const template = await storage.getTemplate(req.params.id);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template não encontrado" });
+      }
+      
+      if (template.userId !== userId) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching template:", error);
+      res.status(500).json({ message: "Failed to fetch template" });
+    }
+  });
+
+  app.get("/api/templates/:id/download", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const template = await storage.getTemplate(req.params.id);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template não encontrado" });
+      }
+      
+      if (template.userId !== userId) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
+      if (template.type !== 'file' || !template.fileData || !template.fileName) {
+        return res.status(400).json({ message: "Template não possui arquivo" });
+      }
+      
+      const fileBuffer = Buffer.from(template.fileData, 'base64');
+      res.setHeader('Content-Type', template.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${template.fileName}"`);
+      res.send(fileBuffer);
+    } catch (error) {
+      console.error("Error downloading template:", error);
+      res.status(500).json({ message: "Failed to download template" });
+    }
+  });
+
+  const createTemplateSchema = z.object({
+    description: z.string().min(1, "Descrição é obrigatória"),
+    type: z.enum(['text', 'file']),
+    content: z.string().optional(),
+    fileName: z.string().optional(),
+    fileData: z.string().optional(),
+    mimeType: z.string().optional(),
+    fileSize: z.number().optional(),
+  });
+
+  const ALLOWED_MIME_TYPES = [
+    'text/csv',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ];
+
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+  app.post("/api/templates", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const data = createTemplateSchema.parse(req.body);
+
+      if (data.type === 'text' && (!data.content || data.content.trim().length === 0)) {
+        return res.status(400).json({ message: "Conteúdo do template é obrigatório" });
+      }
+
+      if (data.type === 'file') {
+        if (!data.fileData || !data.fileName || !data.mimeType) {
+          return res.status(400).json({ message: "Arquivo é obrigatório" });
+        }
+
+        if (!ALLOWED_MIME_TYPES.includes(data.mimeType)) {
+          return res.status(400).json({ 
+            message: "Formato de arquivo não permitido. Formatos aceitos: CSV, PDF, DOC, DOCX, XLS, XLSX" 
+          });
+        }
+
+        if (data.fileSize && data.fileSize > MAX_FILE_SIZE) {
+          return res.status(400).json({ message: "Arquivo excede o limite de 10MB" });
+        }
+      }
+
+      const template = await storage.createTemplate({
+        userId,
+        description: data.description,
+        type: data.type,
+        content: data.type === 'text' ? data.content : null,
+        fileName: data.type === 'file' ? data.fileName : null,
+        fileData: data.type === 'file' ? data.fileData : null,
+        mimeType: data.type === 'file' ? data.mimeType : null,
+        fileSize: data.type === 'file' ? data.fileSize : null,
+      });
+
+      res.json(template);
+    } catch (error: any) {
+      console.error("Error creating template:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create template" });
+    }
+  });
+
+  app.delete("/api/templates/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const template = await storage.getTemplate(req.params.id);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template não encontrado" });
+      }
+      
+      if (template.userId !== userId) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
+      await storage.deleteTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      res.status(500).json({ message: "Failed to delete template" });
     }
   });
 

@@ -23,7 +23,14 @@ import {
   Lock,
   FileArchive,
 } from "lucide-react";
-import { ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType, type Plan, type Artifact } from "@shared/schema";
+import { ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType, type Plan, type Artifact, type Template } from "@shared/schema";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const artifactOptions = [
   {
@@ -62,6 +69,12 @@ export default function Artefatos() {
   const [selectedTypes, setSelectedTypes] = useState<ArtifactType[]>([]);
   const [transcription, setTranscription] = useState("");
   const [generatedArtifacts, setGeneratedArtifacts] = useState<Artifact[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  const { data: templates = [] } = useQuery<Template[]>({
+    queryKey: ["/api/templates"],
+    enabled: isAuthenticated,
+  });
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -82,7 +95,7 @@ export default function Artefatos() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: async (data: { types: ArtifactType[]; transcription: string }) => {
+    mutationFn: async (data: { types: ArtifactType[]; transcription: string; templateId?: string }) => {
       const response = await apiRequest("POST", "/api/artifacts/generate", data);
       const artifacts = await response.json();
       return artifacts as Artifact[];
@@ -213,7 +226,11 @@ export default function Artefatos() {
       });
       return;
     }
-    generateMutation.mutate({ types: selectedTypes, transcription });
+    generateMutation.mutate({ 
+      types: selectedTypes, 
+      transcription,
+      templateId: selectedTemplateId || undefined,
+    });
   };
 
   const isTypeAvailable = (availableIn: string[]): boolean => {
@@ -345,9 +362,43 @@ export default function Artefatos() {
           </CardContent>
         </Card>
 
+        {templates.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>3. Template (Opcional)</CardTitle>
+              <CardDescription>
+                Selecione um template para formatar o artefato gerado
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select
+                value={selectedTemplateId || "none"}
+                onValueChange={(value) => setSelectedTemplateId(value === "none" ? null : value)}
+              >
+                <SelectTrigger className="w-full sm:w-80" data-testid="select-template">
+                  <SelectValue placeholder="Selecione um template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum template</SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id} data-testid={`template-option-${template.id}`}>
+                      {template.description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedTemplateId && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  O template selecionado será usado como referência para formatar o artefato.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
-            <CardTitle>3. Gerar Artefatos</CardTitle>
+            <CardTitle>{templates.length > 0 ? "4" : "3"}. Gerar Artefatos</CardTitle>
             <CardDescription>
               Clique no botão abaixo para processar a transcrição
             </CardDescription>
