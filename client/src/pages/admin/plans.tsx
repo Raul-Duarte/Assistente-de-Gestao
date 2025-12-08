@@ -29,6 +29,7 @@ import {
   Loader2,
   Crown,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
 import type { Plan, InsertPlan } from "@shared/schema";
 import { ARTIFACT_TYPE_LABELS, ARTIFACT_TYPES } from "@shared/schema";
@@ -54,6 +55,7 @@ export default function AdminPlans() {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+  const [deletingPlan, setDeletingPlan] = useState<Plan | null>(null);
   const [formData, setFormData] = useState<Partial<InsertPlan>>({
     name: "",
     slug: "",
@@ -142,6 +144,41 @@ export default function AdminPlans() {
       });
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/admin/plans/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/plans"] });
+      toast({ title: "Plano excluído com sucesso!" });
+      setDeletingPlan(null);
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Sessão expirada",
+          description: "Fazendo login novamente...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Erro ao excluir plano",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeletePlan = () => {
+    if (deletingPlan) {
+      deleteMutation.mutate(deletingPlan.id);
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -470,47 +507,90 @@ export default function AdminPlans() {
                       </li>
                     )}
                   </ul>
-                  <Dialog open={editingPlan?.id === plan.id} onOpenChange={(open) => !open && setEditingPlan(null)}>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => openEditDialog(plan)}
-                        data-testid={`button-edit-plan-${plan.id}`}
-                      >
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Editar Plano
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-lg">
-                      <DialogHeader>
-                        <DialogTitle>Editar Plano</DialogTitle>
-                        <DialogDescription>
-                          Atualize as configurações do plano
-                        </DialogDescription>
-                      </DialogHeader>
-                      <PlanForm />
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setEditingPlan(null)} data-testid="button-cancel-edit">
-                          Cancelar
-                        </Button>
+                  <div className="flex flex-col gap-2">
+                    <Dialog open={editingPlan?.id === plan.id} onOpenChange={(open) => !open && setEditingPlan(null)}>
+                      <DialogTrigger asChild>
                         <Button
-                          onClick={handleSubmit}
-                          disabled={updateMutation.isPending}
-                          data-testid="button-update-plan"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => openEditDialog(plan)}
+                          data-testid={`button-edit-plan-${plan.id}`}
                         >
-                          {updateMutation.isPending ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Salvando...
-                            </>
-                          ) : (
-                            "Salvar"
-                          )}
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Editar Plano
                         </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-lg">
+                        <DialogHeader>
+                          <DialogTitle>Editar Plano</DialogTitle>
+                          <DialogDescription>
+                            Atualize as configurações do plano
+                          </DialogDescription>
+                        </DialogHeader>
+                        <PlanForm />
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setEditingPlan(null)} data-testid="button-cancel-edit">
+                            Cancelar
+                          </Button>
+                          <Button
+                            onClick={handleSubmit}
+                            disabled={updateMutation.isPending}
+                            data-testid="button-update-plan"
+                          >
+                            {updateMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Salvando...
+                              </>
+                            ) : (
+                              "Salvar"
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                    <Dialog open={deletingPlan?.id === plan.id} onOpenChange={(open) => !open && setDeletingPlan(null)}>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full text-destructive"
+                          onClick={() => setDeletingPlan(plan)}
+                          data-testid={`button-delete-plan-${plan.id}`}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Excluir Plano
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Excluir Plano</DialogTitle>
+                          <DialogDescription>
+                            Tem certeza que deseja excluir o plano "{plan.name}"? Esta ação não pode ser desfeita.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setDeletingPlan(null)} data-testid="button-cancel-delete">
+                            Cancelar
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={handleDeletePlan}
+                            disabled={deleteMutation.isPending}
+                            data-testid="button-confirm-delete"
+                          >
+                            {deleteMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Excluindo...
+                              </>
+                            ) : (
+                              "Excluir"
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </CardContent>
               </Card>
             ))}

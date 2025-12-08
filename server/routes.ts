@@ -505,6 +505,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/admin/plans/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      await storage.deletePlan(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting plan:", error);
+      res.status(500).json({ message: "Failed to delete plan" });
+    }
+  });
+
   // Template routes
   app.get("/api/templates", isAuthenticated, async (req: any, res) => {
     try {

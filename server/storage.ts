@@ -42,6 +42,7 @@ export interface IStorage {
   getPlanBySlug(slug: string): Promise<Plan | undefined>;
   createPlan(data: InsertPlan): Promise<Plan>;
   updatePlan(id: string, data: Partial<InsertPlan>): Promise<Plan>;
+  deletePlan(id: string): Promise<void>;
 
   // Artifact operations
   getArtifacts(userId: string): Promise<Artifact[]>;
@@ -206,6 +207,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(plans.id, id))
       .returning();
     return plan;
+  }
+
+  async deletePlan(id: string): Promise<void> {
+    await db.delete(plans).where(eq(plans.id, id));
   }
 
   // Artifact operations

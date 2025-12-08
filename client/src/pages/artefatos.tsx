@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { AdminLayout } from "@/components/admin-layout";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
   Sparkles,
   Lock,
   FileArchive,
+  X,
 } from "lucide-react";
 import { ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType, type Plan, type Artifact, type Template } from "@shared/schema";
 import {
@@ -70,6 +71,7 @@ export default function Artefatos() {
   const [transcription, setTranscription] = useState("");
   const [generatedArtifacts, setGeneratedArtifacts] = useState<Artifact[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const { data: templates = [] } = useQuery<Template[]>({
     queryKey: ["/api/templates"],
@@ -96,9 +98,28 @@ export default function Artefatos() {
 
   const generateMutation = useMutation({
     mutationFn: async (data: { types: ArtifactType[]; transcription: string; templateId?: string }) => {
-      const response = await apiRequest("POST", "/api/artifacts/generate", data);
-      const artifacts = await response.json();
-      return artifacts as Artifact[];
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      try {
+        const response = await fetch("/api/artifacts/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+          credentials: "include",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error("401: Unauthorized");
+          }
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `${response.status}: ${response.statusText}`);
+        }
+        const artifacts = await response.json();
+        return artifacts as Artifact[];
+      } finally {
+        abortControllerRef.current = null;
+      }
     },
     onSuccess: (data) => {
       setGeneratedArtifacts(data);
@@ -109,6 +130,13 @@ export default function Artefatos() {
       });
     },
     onError: (error: Error) => {
+      if (error.name === "AbortError") {
+        toast({
+          title: "Geração cancelada",
+          description: "A geração de artefatos foi interrompida.",
+        });
+        return;
+      }
       if (isUnauthorizedError(error)) {
         toast({
           title: "Sessão expirada",
@@ -127,6 +155,12 @@ export default function Artefatos() {
       });
     },
   });
+
+  const handleCancelGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
 
   const downloadMutation = useMutation({
     mutationFn: async (artifactId: string) => {
@@ -404,29 +438,43 @@ export default function Artefatos() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button
-              size="lg"
-              onClick={handleGenerate}
-              disabled={
-                generateMutation.isPending ||
-                selectedTypes.length === 0 ||
-                !transcription.trim()
-              }
-              className="w-full sm:w-auto"
-              data-testid="button-generate"
-            >
-              {generateMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Gerar {selectedTypes.length} Artefato(s)
-                </>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                size="lg"
+                onClick={handleGenerate}
+                disabled={
+                  generateMutation.isPending ||
+                  selectedTypes.length === 0 ||
+                  !transcription.trim()
+                }
+                className="w-full sm:w-auto"
+                data-testid="button-generate"
+              >
+                {generateMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Gerar {selectedTypes.length} Artefato(s)
+                  </>
+                )}
+              </Button>
+              {generateMutation.isPending && (
+                <Button
+                  size="lg"
+                  variant="destructive"
+                  onClick={handleCancelGeneration}
+                  className="w-full sm:w-auto"
+                  data-testid="button-cancel-generate"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Cancelar
+                </Button>
               )}
-            </Button>
+            </div>
           </CardContent>
         </Card>
 
