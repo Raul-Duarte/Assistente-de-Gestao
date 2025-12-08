@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -77,6 +77,7 @@ export default function AdminSubscriptions() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState<SubscriptionForm>(initialForm);
   const [selectedPlanFilters, setSelectedPlanFilters] = useState<string[]>([]);
+  const hasInitializedFiltersRef = useRef(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -91,12 +92,13 @@ export default function AdminSubscriptions() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
-  // Initialize plan filters with all plans selected by default
+  // Initialize plan filters with all plans selected by default (only once)
   useEffect(() => {
-    if (plans && plans.length > 0 && selectedPlanFilters.length === 0) {
+    if (plans && plans.length > 0 && !hasInitializedFiltersRef.current) {
       setSelectedPlanFilters(plans.map(p => p.id));
+      hasInitializedFiltersRef.current = true;
     }
-  }, [plans, selectedPlanFilters.length]);
+  }, [plans]);
 
   const { data: subscriptions, isLoading } = useQuery<SubscriptionWithRelations[]>({
     queryKey: ["/api/admin/subscriptions"],

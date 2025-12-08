@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +55,7 @@ export default function AdminReports() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [selectedPlanFilters, setSelectedPlanFilters] = useState<string[]>([]);
+  const hasInitializedFiltersRef = useRef(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -74,12 +75,13 @@ export default function AdminReports() {
     enabled: isAuthenticated,
   });
 
-  // Initialize plan filters with all plans selected by default
+  // Initialize plan filters with all plans selected by default (only once)
   useEffect(() => {
-    if (plans && plans.length > 0 && selectedPlanFilters.length === 0) {
+    if (plans && plans.length > 0 && !hasInitializedFiltersRef.current) {
       setSelectedPlanFilters(plans.map(p => p.id));
+      hasInitializedFiltersRef.current = true;
     }
-  }, [plans, selectedPlanFilters.length]);
+  }, [plans]);
 
   const togglePlanFilter = (planId: string) => {
     setSelectedPlanFilters(prev =>
@@ -295,11 +297,69 @@ export default function AdminReports() {
 
           <TabsContent value="active">
             <Card>
-              <CardHeader>
-                <CardTitle>Clientes Ativos</CardTitle>
-                <CardDescription>
-                  Lista de clientes com status ativo no sistema
-                </CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle>Clientes Ativos</CardTitle>
+                  <CardDescription>
+                    Lista de clientes com status ativo no sistema
+                  </CardDescription>
+                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-plan-filter-active">
+                      <Filter className="mr-2 h-4 w-4" />
+                      Filtrar Planos
+                      {selectedPlanFilters.length > 0 && plans && selectedPlanFilters.length < plans.length && (
+                        <Badge variant="secondary" className="ml-2">
+                          {selectedPlanFilters.length}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56" align="end">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">Planos</span>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={selectAllPlans}
+                            data-testid="button-select-all-plans-active"
+                          >
+                            Todos
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={clearAllPlans}
+                            data-testid="button-clear-plans-active"
+                          >
+                            Limpar
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {plans?.map((plan) => (
+                          <div key={plan.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`plan-filter-active-${plan.id}`}
+                              checked={selectedPlanFilters.includes(plan.id)}
+                              onCheckedChange={() => togglePlanFilter(plan.id)}
+                              data-testid={`checkbox-plan-active-${plan.slug}`}
+                            />
+                            <label
+                              htmlFor={`plan-filter-active-${plan.id}`}
+                              className="text-sm cursor-pointer flex-1"
+                            >
+                              {plan.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </CardHeader>
               <CardContent>
                 {loadingActive ? (
@@ -348,11 +408,69 @@ export default function AdminReports() {
 
           <TabsContent value="overdue">
             <Card>
-              <CardHeader>
-                <CardTitle>Clientes Inadimplentes</CardTitle>
-                <CardDescription>
-                  Lista de clientes com mensalidades em atraso
-                </CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle>Clientes Inadimplentes</CardTitle>
+                  <CardDescription>
+                    Lista de clientes com mensalidades em atraso
+                  </CardDescription>
+                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-plan-filter-overdue">
+                      <Filter className="mr-2 h-4 w-4" />
+                      Filtrar Planos
+                      {selectedPlanFilters.length > 0 && plans && selectedPlanFilters.length < plans.length && (
+                        <Badge variant="secondary" className="ml-2">
+                          {selectedPlanFilters.length}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56" align="end">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">Planos</span>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={selectAllPlans}
+                            data-testid="button-select-all-plans-overdue"
+                          >
+                            Todos
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={clearAllPlans}
+                            data-testid="button-clear-plans-overdue"
+                          >
+                            Limpar
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {plans?.map((plan) => (
+                          <div key={plan.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`plan-filter-overdue-${plan.id}`}
+                              checked={selectedPlanFilters.includes(plan.id)}
+                              onCheckedChange={() => togglePlanFilter(plan.id)}
+                              data-testid={`checkbox-plan-overdue-${plan.slug}`}
+                            />
+                            <label
+                              htmlFor={`plan-filter-overdue-${plan.id}`}
+                              className="text-sm cursor-pointer flex-1"
+                            >
+                              {plan.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </CardHeader>
               <CardContent>
                 {loadingOverdue ? (
