@@ -48,6 +48,7 @@ export interface IStorage {
   getAllArtifacts(): Promise<(Artifact & { user?: User })[]>;
   getArtifact(id: string): Promise<Artifact | undefined>;
   createArtifact(data: InsertArtifact): Promise<Artifact>;
+  deleteArtifact(id: string): Promise<void>;
 
   // Template operations
   getTemplates(userId: string): Promise<Template[]>;
@@ -237,6 +238,10 @@ export class DatabaseStorage implements IStorage {
   async createArtifact(data: InsertArtifact): Promise<Artifact> {
     const [artifact] = await db.insert(artifacts).values(data).returning();
     return artifact;
+  }
+
+  async deleteArtifact(id: string): Promise<void> {
+    await db.delete(artifacts).where(eq(artifacts.id, id));
   }
 
   // Template operations

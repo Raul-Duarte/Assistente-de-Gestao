@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
@@ -16,7 +16,11 @@ import {
   Crown,
   Sparkles,
 } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import type { Artifact, Plan, Profile } from "@shared/schema";
+import { ARTIFACT_TYPE_LABELS, type ArtifactType } from "@shared/schema";
+
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
 export default function Dashboard() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -71,6 +75,22 @@ export default function Dashboard() {
 
   const isAdmin = userProfile?.name === "Administrador";
   const recentArtifacts = artifacts?.slice(0, 5) || [];
+
+  const chartData = useMemo(() => {
+    if (!artifacts || artifacts.length === 0) return [];
+    
+    const typeCounts: Record<string, number> = {};
+    artifacts.forEach((artifact) => {
+      const type = artifact.type;
+      typeCounts[type] = (typeCounts[type] || 0) + 1;
+    });
+
+    return Object.entries(typeCounts).map(([type, count]) => ({
+      name: ARTIFACT_TYPE_LABELS[type as ArtifactType] || type,
+      value: count,
+      percentage: Math.round((count / artifacts.length) * 100),
+    }));
+  }, [artifacts]);
 
   return (
     <AdminLayout>
@@ -148,6 +168,64 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {chartData.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Distribuição por Tipo</CardTitle>
+              <CardDescription>Porcentagem de artefatos por categoria</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col md:flex-row items-center gap-6">
+                <div className="h-64 w-full md:w-1/2" data-testid="chart-artifacts">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={2}
+                        dataKey="value"
+                        label={({ percentage }) => `${percentage}%`}
+                        labelLine={false}
+                      >
+                        {chartData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value: number, name: string) => [`${value} artefatos`, name]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-col gap-3 w-full md:w-1/2">
+                  {chartData.map((item, index) => (
+                    <div 
+                      key={item.name} 
+                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                      data-testid={`chart-legend-${index}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="h-3 w-3 rounded-full" 
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        <span className="text-sm font-medium">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">{item.value} artefatos</span>
+                        <Badge variant="secondary">{item.percentage}%</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6">
           <Card>

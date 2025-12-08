@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AdminLayout } from "@/components/admin-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { FileText, Download, Calendar, Filter, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { FileText, Download, Calendar, Filter, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Artifact } from "@shared/schema";
@@ -30,6 +43,7 @@ import { ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType } from "@shared
 
 export default function MeusArtefatosPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -37,6 +51,26 @@ export default function MeusArtefatosPage() {
   const { data: artifacts = [], isLoading } = useQuery<Artifact[]>({
     queryKey: ["/api/artifacts"],
     enabled: isAuthenticated,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/artifacts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/artifacts"] });
+      toast({
+        title: "Artefato excluído",
+        description: "O artefato foi excluído com sucesso.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o artefato.",
+        variant: "destructive",
+      });
+    },
   });
 
   const filteredArtifacts = useMemo(() => {
@@ -257,15 +291,47 @@ export default function MeusArtefatosPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDownload(artifact.id)}
-                            data-testid={`button-download-${artifact.id}`}
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            Baixar PDF
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDownload(artifact.id)}
+                              data-testid={`button-download-${artifact.id}`}
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Baixar PDF
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-destructive"
+                                  data-testid={`button-delete-${artifact.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir artefato?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta ação não pode ser desfeita. O artefato será permanentemente excluído.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteMutation.mutate(artifact.id)}
+                                    className="bg-destructive text-destructive-foreground"
+                                    data-testid={`button-confirm-delete-${artifact.id}`}
+                                  >
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

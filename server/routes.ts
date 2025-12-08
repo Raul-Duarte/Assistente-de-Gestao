@@ -265,6 +265,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete artifact
+  app.delete("/api/artifacts/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const artifact = await storage.getArtifact(req.params.id);
+
+      if (!artifact) {
+        return res.status(404).json({ message: "Artefato não encontrado" });
+      }
+
+      // Check if user owns the artifact
+      const userId = req.user.claims.sub;
+      if (artifact.userId !== userId) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      await storage.deleteArtifact(req.params.id);
+      res.json({ message: "Artefato excluído com sucesso" });
+    } catch (error) {
+      console.error("Error deleting artifact:", error);
+      res.status(500).json({ message: "Failed to delete artifact" });
+    }
+  });
+
   // Admin routes - Users
   app.get("/api/admin/users", isAuthenticated, async (req: any, res) => {
     try {
