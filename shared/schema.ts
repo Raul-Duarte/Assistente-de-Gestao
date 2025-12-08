@@ -109,6 +109,7 @@ export const artifacts = pgTable("artifacts", {
   content: text("content").notNull(),
   transcription: text("transcription"),
   templateId: varchar("template_id").references(() => templates.id),
+  fileType: varchar("file_type", { length: 10 }).default("pdf").notNull(),
   status: varchar("status", { length: 20 }).default("completed"),
   createdAt: timestamp("created_at").defaultNow(),
 });

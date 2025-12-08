@@ -1,0 +1,133 @@
+RN-01 — O botão de download deve refletir dinamicamente o tipo de arquivo do artefato
+
+Descrição:
+O texto, ícone, extensão e comportamento do botão de download devem ser determinados automaticamente com base no tipo de arquivo (fileType) configurado no artefato gerado.
+
+Detalhamento:
+
+O valor do botão não pode ser fixo.
+
+O sistema deve verificar o campo fileType do artefato e ajustar automaticamente:
+
+A extensão exibida (ex.: “Baixar PDF”, “Baixar XLSX”, “Baixar CSV”)
+
+O tipo MIME do arquivo
+
+O nome do arquivo exportado
+
+O ícone ou representação visual (quando existir)
+
+Exemplos:
+
+fileType = "pdf" → botão: Baixar PDF
+
+fileType = "xlsx" → botão: Baixar XLSX
+
+fileType = "csv" → botão: Baixar CSV
+
+fileType = "docx" → botão: Baixar DOCX
+
+Objetivo da Regra:
+Garantir consistência visual e funcional para os usuários, evitando confusão e downloads incorretos.
+
+RN-02 — O artefato deve ser sempre gerado no formato configurado no tipo de arquivo (fileType)
+
+Descrição:
+Após a geração de conteúdo pelo GPT, o sistema backend deve criar o arquivo físico no formato definido no campo fileType, a menos que um template tenha sido enviado (caso em que o template prevalece).
+
+Essa regra garante que o artefato final seja exportado corretamente e compatível com a extensão configurada.
+
+RN-02.1 — Se o tipo de artefato é XLSX, o sistema deve gerar obrigatoriamente um arquivo .xlsx
+
+Assim:
+
+A saída textual do GPT deve ser interpretada como dados tabulares.
+
+O backend deve criar um arquivo Excel válido (planilhas, células, tabelas).
+
+O navegador deve fazer o download de um arquivo real .xlsx.
+
+Erro proibido:
+Gerar .txt, .json ou .md renomeado como .xlsx.
+
+RN-02.2 — Se o tipo de artefato for PDF, o sistema deve gerar um PDF válido
+
+Isso significa:
+
+Converter o texto recebido pelo GPT para PDF.
+
+Aplicar formatação mínima coerente (títulos, parágrafos).
+
+Não entregar arquivos em outro formato renomeados como .pdf.
+
+RN-02.3 — Se o tipo de artefato for CSV, a saída final deve ser apenas dados separados por vírgula
+
+O backend deve:
+
+Gerar um arquivo .csv real.
+
+Garantir que não haja estruturas incompatíveis com CSV.
+
+Impedir geração com formatação Markdown, tabelas HTML ou outras estruturas.
+
+RN-02.4 — Se o tipo de artefato for DOCX, o sistema deve gerar um .docx real
+
+O backend deve montar o arquivo em formato Word com:
+
+Cabeçalhos, listas, parágrafos e títulos estruturados.
+
+Compatibilidade com Microsoft Word e Google Docs.
+
+RN-03 — Quando existir template, ele sempre tem prioridade sobre fileType
+
+Reforço da regra já criada anteriormente:
+
+Se o template anexado for .docx, o artefato final deve ser um .docx.
+
+Se o template for .xlsx, o artefato deve ser .xlsx.
+
+FileType deve ser ignorado sempre que o template estiver presente.
+
+RN-04 — O sistema deve validar inconsistências antes de gerar o arquivo
+
+O sistema deve impedir combinações inválidas, como:
+
+Template .docx + artefato configurado como .xlsx
+
+Template .xlsx + artefato configurado como .pdf
+
+A regra é simples:
+
+O template define o formato final.
+
+Se houver conflito → bloquear ou avisar o usuário.
+
+RN-05 — O artefato deve ser entregue ao usuário no formato exato que o backend gerou
+
+Ou seja:
+
+O backend não pode depender do GPT para preservar estrutura.
+
+O frontend apenas recebe o arquivo final e baixa.
+
+O nome do arquivo deve conter a extensão correspondente ao fileType ou ao template.
+
+RN-06 — Erros de conversão ou incompatibilidade devem ser tratados e registrados
+
+Se durante a geração:
+
+O backend falhar ao criar o PDF
+
+O XLSX for inválido
+
+O CSV vier com formatação incompatível
+
+Então o sistema deve:
+
+Registrar o erro
+
+Não entregar um arquivo corrompido
+
+Enviar mensagem clara ao usuário
+
+Oferecer opção de tentar novamente

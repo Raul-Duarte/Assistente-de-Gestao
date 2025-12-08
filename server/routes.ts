@@ -145,6 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const artifactType = typeMap.get(typeSlug);
         const typeName = artifactType?.title || typeSlug;
         const typeDescription = artifactType?.description;
+        const fileType = artifactType?.fileType || "pdf";
         
         const content = await generateArtifactContent(typeSlug, typeName, transcription, typeDescription, templateContent);
         const title = `${typeName} - ${new Date().toLocaleDateString("pt-BR")}`;
@@ -156,6 +157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           content,
           transcription,
           templateId: templateId || null,
+          fileType,
           status: "completed",
         });
 
@@ -227,6 +229,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating PDF:", error);
       res.status(500).json({ message: "Failed to generate PDF" });
+    }
+  });
+
+  // Generic download endpoint that respects artifact fileType
+  app.get("/api/artifacts/:id/download", isAuthenticated, async (req: any, res) => {
+    try {
+      const artifact = await storage.getArtifact(req.params.id);
+
+      if (!artifact) {
+        return res.status(404).json({ message: "Artefato não encontrado" });
+      }
+
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      const isAdmin = userProfile?.name === "Administrador";
+      
+      if (artifact.userId !== userId && !isAdmin) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const fileType = artifact.fileType || "pdf";
+      const safeTitle = artifact.title.replace(/[^a-zA-Z0-9\s\-_]/g, "").trim();
+
+      switch (fileType) {
+        case "md":
+          res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.md"`);
+          res.send(`# ${artifact.title}\n\n_Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}_\n\n---\n\n${artifact.content}`);
+          break;
+
+        case "txt":
+          const txtContent = artifact.content
+            .replace(/^#{1,6}\s+(.+)$/gm, "$1")
+            .replace(/\*\*(.+?)\*\*/g, "$1")
+            .replace(/\*(.+?)\*/g, "$1")
+            .replace(/`(.+?)`/g, "$1")
+            .replace(/^[-*]\s+/gm, "- ");
+          res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.txt"`);
+          res.send(`${artifact.title}\nGerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}\n\n${txtContent}`);
+          break;
+
+        case "csv":
+          const lines = artifact.content.split("\n").filter(line => line.trim());
+          const csvLines = lines.map(line => {
+            const cleanLine = line
+              .replace(/^#{1,6}\s+/, "")
+              .replace(/\*\*(.+?)\*\*/g, "$1")
+              .replace(/\*(.+?)\*/g, "$1")
+              .replace(/^[-*]\s+/, "");
+            return `"${cleanLine.replace(/"/g, '""')}"`;
+          });
+          res.setHeader("Content-Type", "text/csv; charset=utf-8");
+          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.csv"`);
+          res.send(`"Titulo","${artifact.title}"\n"Data","${new Date(artifact.createdAt!).toLocaleString("pt-BR")}"\n"Conteudo"\n${csvLines.join("\n")}`);
+          break;
+
+        case "xlsx":
+          // For XLSX, we generate a simple XML-based Excel file (SpreadsheetML)
+          const xlsxLines = artifact.content.split("\n").filter(line => line.trim());
+          let xlsxRows = xlsxLines.map((line, idx) => {
+            const cleanLine = line
+              .replace(/^#{1,6}\s+/, "")
+              .replace(/\*\*(.+?)\*\*/g, "$1")
+              .replace(/\*(.+?)\*/g, "$1")
+              .replace(/^[-*]\s+/, "");
+            return `<Row><Cell><Data ss:Type="String">${cleanLine.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</Data></Cell></Row>`;
+          }).join("");
+          
+          const xlsxContent = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Worksheet ss:Name="Artefato">
+    <Table>
+      <Row><Cell><Data ss:Type="String">${artifact.title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</Data></Cell></Row>
+      <Row><Cell><Data ss:Type="String">Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}</Data></Cell></Row>
+      <Row><Cell><Data ss:Type="String"></Data></Cell></Row>
+      ${xlsxRows}
+    </Table>
+  </Worksheet>
+</Workbook>`;
+          res.setHeader("Content-Type", "application/vnd.ms-excel");
+          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.xls"`);
+          res.send(xlsxContent);
+          break;
+
+        case "docx":
+          // For DOCX, redirect to PDF for now (complex format)
+          // Fall through to PDF generation
+        case "pdf":
+        default:
+          const doc = new PDFDocument({ margin: 50 });
+          const chunks: Buffer[] = [];
+
+          doc.on("data", (chunk) => chunks.push(chunk));
+          doc.on("end", () => {
+            const pdfBuffer = Buffer.concat(chunks);
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.pdf"`);
+            res.send(pdfBuffer);
+          });
+
+          doc.fontSize(24).font("Helvetica-Bold").text(artifact.title, { align: "center" });
+          doc.moveDown();
+          
+          doc.fontSize(10).font("Helvetica").fillColor("#666666")
+            .text(`Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}`, { align: "center" });
+          doc.moveDown(2);
+
+          const pdfContent = artifact.content
+            .replace(/^### (.+)$/gm, "\n$1\n")
+            .replace(/^## (.+)$/gm, "\n$1\n")
+            .replace(/^# (.+)$/gm, "\n$1\n")
+            .replace(/\*\*(.+?)\*\*/g, "$1")
+            .replace(/\*(.+?)\*/g, "$1")
+            .replace(/^- /gm, "• ");
+
+          doc.fontSize(12).font("Helvetica").fillColor("#000000").text(pdfContent, {
+            align: "left",
+            lineGap: 4,
+          });
+
+          doc.end();
+          break;
+      }
+    } catch (error) {
+      console.error("Error generating download:", error);
+      res.status(500).json({ message: "Failed to generate download" });
     }
   });
 
