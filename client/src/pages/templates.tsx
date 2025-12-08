@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -321,13 +321,11 @@ export default function Templates() {
                 {templateType === 'text' ? (
                   <div className="space-y-2">
                     <Label htmlFor="content">Conteúdo do Template</Label>
-                    <Textarea
-                      id="content"
-                      placeholder="Digite o formato/estrutura do seu template aqui..."
+                    <RichTextEditor
                       value={textContent}
-                      onChange={(e) => setTextContent(e.target.value)}
-                      className="min-h-[200px]"
-                      data-testid="textarea-template-content"
+                      onChange={setTextContent}
+                      placeholder="Digite o formato/estrutura do seu template aqui..."
+                      data-testid="rte-template-content"
                     />
                   </div>
                 ) : (
