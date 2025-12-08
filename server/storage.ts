@@ -77,6 +77,7 @@ export interface IStorage {
   getArtifactType(id: string): Promise<ArtifactTypeRecord | undefined>;
   getArtifactTypeBySlug(slug: string): Promise<ArtifactTypeRecord | undefined>;
   createArtifactType(data: InsertArtifactType): Promise<ArtifactTypeRecord>;
+  updateArtifactType(id: string, data: Partial<InsertArtifactType>): Promise<ArtifactTypeRecord>;
   deleteArtifactType(id: string): Promise<void>;
 
   // Client operations
@@ -347,6 +348,15 @@ export class DatabaseStorage implements IStorage {
 
   async createArtifactType(data: InsertArtifactType): Promise<ArtifactTypeRecord> {
     const [type] = await db.insert(artifactTypes).values(data).returning();
+    return type;
+  }
+
+  async updateArtifactType(id: string, data: Partial<InsertArtifactType>): Promise<ArtifactTypeRecord> {
+    const [type] = await db
+      .update(artifactTypes)
+      .set(data)
+      .where(eq(artifactTypes.id, id))
+      .returning();
     return type;
   }
 

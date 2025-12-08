@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -8,10 +8,32 @@ import { AdminLayout } from "@/components/admin-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   FileText,
   Loader2,
@@ -20,15 +42,27 @@ import {
   Lock,
   FileArchive,
   X,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  ChevronsUpDown,
+  Check,
+  FileCheck,
 } from "lucide-react";
 import { type Plan, type Artifact, type Template, type ArtifactTypeRecord } from "@shared/schema";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { Link } from "wouter";
+
+const FILE_TYPE_LABELS: Record<string, string> = {
+  pdf: "PDF",
+  docx: "DOCX",
+  xlsx: "XLSX",
+  csv: "CSV",
+  txt: "TXT",
+  md: "MD",
+};
+
+const ITEMS_PER_PAGE = 6;
 
 export default function Artefatos() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -37,6 +71,11 @@ export default function Artefatos() {
   const [transcription, setTranscription] = useState("");
   const [generatedArtifacts, setGeneratedArtifacts] = useState<Artifact[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const { data: artifactTypes = [], isLoading: typesLoading } = useQuery<ArtifactTypeRecord[]>({
@@ -67,6 +106,40 @@ export default function Artefatos() {
     enabled: isAuthenticated,
   });
 
+  const filteredTypes = useMemo(() => {
+    const activeTypes = artifactTypes.filter(t => t.isActive);
+    if (!searchQuery.trim()) return activeTypes;
+    return activeTypes.filter(t => 
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.slug.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [artifactTypes, searchQuery]);
+
+  const totalPages = Math.ceil(filteredTypes.length / ITEMS_PER_PAGE);
+  const paginatedTypes = filteredTypes.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const filteredTemplates = useMemo(() => {
+    if (!templateSearch.trim()) return templates;
+    return templates.filter(t =>
+      t.description.toLowerCase().includes(templateSearch.toLowerCase())
+    );
+  }, [templates, templateSearch]);
+
+  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const generateMutation = useMutation({
     mutationFn: async (data: { types: string[]; transcription: string; templateId?: string }) => {
       const controller = new AbortController();
@@ -95,10 +168,7 @@ export default function Artefatos() {
     onSuccess: (data) => {
       setGeneratedArtifacts(data);
       queryClient.invalidateQueries({ queryKey: ["/api/artifacts"] });
-      toast({
-        title: "Artefatos gerados!",
-        description: `${data.length} documento(s) gerado(s) com sucesso.`,
-      });
+      setShowSuccessDialog(true);
     },
     onError: (error: Error) => {
       if (error.name === "AbortError") {
@@ -241,7 +311,6 @@ export default function Artefatos() {
   const isTypeAvailable = (typeSlug: string): boolean => {
     if (!userPlan?.tools) return false;
     const tools = userPlan.tools as string[];
-    // If plan has all 4 legacy types, grant access to all active types (Premium behavior)
     const legacyTypes = ['business_rules', 'action_points', 'referrals', 'critical_points'];
     const hasAllLegacyTypes = legacyTypes.every(t => tools.includes(t));
     if (hasAllLegacyTypes) return true;
@@ -284,7 +353,18 @@ export default function Artefatos() {
               Escolha quais documentos deseja gerar a partir da transcrição
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar tipo de artefato..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-artifact-types"
+              />
+            </div>
+
             {planLoading || typesLoading ? (
               <div className="grid sm:grid-cols-2 gap-4">
                 <Skeleton className="h-24" />
@@ -292,61 +372,98 @@ export default function Artefatos() {
                 <Skeleton className="h-24" />
                 <Skeleton className="h-24" />
               </div>
-            ) : artifactTypes.length === 0 ? (
+            ) : filteredTypes.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhum tipo de artefato disponível.</p>
-                <p className="text-sm">Contate o administrador.</p>
+                {searchQuery ? (
+                  <p>Nenhum tipo encontrado para "{searchQuery}"</p>
+                ) : (
+                  <>
+                    <p>Nenhum tipo de artefato disponível.</p>
+                    <p className="text-sm">Contate o administrador.</p>
+                  </>
+                )}
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-4">
-                {artifactTypes.filter(t => t.isActive).map((artifactType) => {
-                  const available = isTypeAvailable(artifactType.slug);
-                  const isSelected = selectedTypes.includes(artifactType.slug);
+              <>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {paginatedTypes.map((artifactType) => {
+                    const available = isTypeAvailable(artifactType.slug);
+                    const isSelected = selectedTypes.includes(artifactType.slug);
 
-                  return (
-                    <div
-                      key={artifactType.id}
-                      className={`relative flex items-start gap-4 p-4 rounded-lg border transition-colors ${
-                        available
-                          ? isSelected
-                            ? "border-primary bg-primary/5"
-                            : "hover:border-primary/50 cursor-pointer"
-                          : "opacity-60 cursor-not-allowed bg-muted/30"
-                      }`}
-                      onClick={() => available && handleTypeToggle(artifactType.slug)}
-                      data-testid={`artifact-option-${artifactType.slug}`}
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        disabled={!available}
-                        onCheckedChange={() => available && handleTypeToggle(artifactType.slug)}
-                        className="mt-1"
-                        data-testid={`checkbox-${artifactType.slug}`}
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-primary" />
-                          <span className="font-medium" data-testid={`label-${artifactType.slug}`}>{artifactType.title}</span>
+                    return (
+                      <div
+                        key={artifactType.id}
+                        className={`relative flex items-start gap-4 p-4 rounded-lg border transition-colors ${
+                          available
+                            ? isSelected
+                              ? "border-primary bg-primary/5"
+                              : "hover:border-primary/50 cursor-pointer"
+                            : "opacity-60 cursor-not-allowed bg-muted/30"
+                        }`}
+                        onClick={() => available && handleTypeToggle(artifactType.slug)}
+                        data-testid={`artifact-option-${artifactType.slug}`}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          disabled={!available}
+                          onCheckedChange={() => available && handleTypeToggle(artifactType.slug)}
+                          className="mt-1"
+                          data-testid={`checkbox-${artifactType.slug}`}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <FileText className="h-4 w-4 text-primary" />
+                            <span className="font-medium" data-testid={`label-${artifactType.slug}`}>{artifactType.title}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {FILE_TYPE_LABELS[artifactType.fileType || "pdf"] || artifactType.fileType?.toUpperCase()}
+                            </Badge>
+                            {!available && (
+                              <Lock className="h-3 w-3 text-muted-foreground" />
+                            )}
+                          </div>
+                          {artifactType.description && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {artifactType.description}
+                            </p>
+                          )}
                           {!available && (
-                            <Lock className="h-3 w-3 text-muted-foreground" />
+                            <Badge variant="outline" className="mt-2 text-xs" data-testid={`badge-upgrade-${artifactType.slug}`}>
+                              Não disponível no seu plano
+                            </Badge>
                           )}
                         </div>
-                        {artifactType.description && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {artifactType.description}
-                          </p>
-                        )}
-                        {!available && (
-                          <Badge variant="outline" className="mt-2 text-xs" data-testid={`badge-upgrade-${artifactType.slug}`}>
-                            Não disponível no seu plano
-                          </Badge>
-                        )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      data-testid="button-prev-page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      data-testid="button-next-page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -355,7 +472,7 @@ export default function Artefatos() {
           <CardHeader>
             <CardTitle>2. Cole a Transcrição</CardTitle>
             <CardDescription>
-              Insira a transcrição completa da reunião
+              Insira a transcrição completa da reunião. Use a barra de ferramentas para formatar o texto.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -363,13 +480,11 @@ export default function Artefatos() {
               <Label htmlFor="transcription" className="sr-only">
                 Transcrição da reunião
               </Label>
-              <Textarea
-                id="transcription"
-                placeholder="Cole aqui a transcrição da sua reunião...&#10;&#10;Exemplo:&#10;João: Precisamos definir as regras para o novo processo de aprovação.&#10;Maria: Concordo. Sugiro que todo pedido acima de R$ 5.000 precise de aprovação do gerente.&#10;João: Ótimo. E os pedidos menores podem ser aprovados automaticamente.&#10;Maria: Certo. Vou encaminhar isso para o TI implementar no sistema."
-                className="min-h-64 resize-y"
+              <RichTextEditor
                 value={transcription}
-                onChange={(e) => setTranscription(e.target.value)}
-                data-testid="textarea-transcription"
+                onChange={setTranscription}
+                placeholder="Cole aqui a transcrição da sua reunião..."
+                data-testid="rte-transcription"
               />
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span data-testid="text-char-count">{transcription.length} caracteres</span>
@@ -388,22 +503,74 @@ export default function Artefatos() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Select
-                value={selectedTemplateId || "none"}
-                onValueChange={(value) => setSelectedTemplateId(value === "none" ? null : value)}
-              >
-                <SelectTrigger className="w-full sm:w-80" data-testid="select-template">
-                  <SelectValue placeholder="Selecione um template..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum template</SelectItem>
-                  {templates.map((template) => (
-                    <SelectItem key={template.id} value={template.id} data-testid={`template-option-${template.id}`}>
-                      {template.description}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={templateOpen} onOpenChange={setTemplateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={templateOpen}
+                    className="w-full sm:w-96 justify-between"
+                    data-testid="select-template"
+                  >
+                    {selectedTemplate
+                      ? selectedTemplate.description
+                      : "Selecione um template..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full sm:w-96 p-0" align="start">
+                  <Command>
+                    <CommandInput 
+                      placeholder="Buscar template..." 
+                      value={templateSearch}
+                      onValueChange={setTemplateSearch}
+                      data-testid="input-search-template"
+                    />
+                    <CommandList>
+                      <CommandEmpty>Nenhum template encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="none"
+                          onSelect={() => {
+                            setSelectedTemplateId(null);
+                            setTemplateOpen(false);
+                            setTemplateSearch("");
+                          }}
+                          data-testid="template-option-none"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              !selectedTemplateId ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          Nenhum template
+                        </CommandItem>
+                        {filteredTemplates.map((template) => (
+                          <CommandItem
+                            key={template.id}
+                            value={template.description}
+                            onSelect={() => {
+                              setSelectedTemplateId(template.id);
+                              setTemplateOpen(false);
+                              setTemplateSearch("");
+                            }}
+                            data-testid={`template-option-${template.id}`}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedTemplateId === template.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {template.description}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               {selectedTemplateId && (
                 <p className="text-sm text-muted-foreground mt-2">
                   O template selecionado será usado como referência para formatar o artefato.
@@ -534,6 +701,31 @@ export default function Artefatos() {
             </CardContent>
           </Card>
         )}
+
+        <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileCheck className="h-5 w-5 text-green-500" />
+                Artefatos Gerados com Sucesso
+              </DialogTitle>
+              <DialogDescription>
+                {generatedArtifacts.length} artefato(s) foram gerados e estão disponíveis em "Meus Artefatos".
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => setShowSuccessDialog(false)} data-testid="button-close-success">
+                Continuar aqui
+              </Button>
+              <Link href="/meus-artefatos">
+                <Button data-testid="button-go-to-artifacts">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Ver Meus Artefatos
+                </Button>
+              </Link>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );

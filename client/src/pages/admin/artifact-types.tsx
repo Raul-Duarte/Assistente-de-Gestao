@@ -19,25 +19,46 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Plus,
   Trash2,
   Loader2,
   FileText,
+  Pencil,
 } from "lucide-react";
 import type { ArtifactTypeRecord, InsertArtifactType } from "@shared/schema";
+import { FILE_TYPES } from "@shared/schema";
+
+const FILE_TYPE_LABELS: Record<string, string> = {
+  pdf: "PDF",
+  docx: "Word (DOCX)",
+  xlsx: "Excel (XLSX)",
+  csv: "CSV",
+  txt: "Texto (TXT)",
+  md: "Markdown (MD)",
+};
 
 export default function AdminArtifactTypes() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingType, setEditingType] = useState<ArtifactTypeRecord | null>(null);
   const [deletingType, setDeletingType] = useState<ArtifactTypeRecord | null>(null);
   const [formData, setFormData] = useState<Partial<InsertArtifactType>>({
     slug: "",
     title: "",
     description: "",
+    fileType: "pdf",
     isActive: true,
   });
 
@@ -89,6 +110,36 @@ export default function AdminArtifactTypes() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<InsertArtifactType> }) => {
+      return apiRequest("PATCH", `/api/admin/artifact-types/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/artifact-types"] });
+      toast({ title: "Tipo de artefato atualizado com sucesso!" });
+      setEditingType(null);
+      resetForm();
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Sessão expirada",
+          description: "Fazendo login novamente...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Erro ao atualizar tipo de artefato",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       return apiRequest("DELETE", `/api/admin/artifact-types/${id}`);
@@ -123,8 +174,20 @@ export default function AdminArtifactTypes() {
       slug: "",
       title: "",
       description: "",
+      fileType: "pdf",
       isActive: true,
     });
+  };
+
+  const handleOpenEdit = (type: ArtifactTypeRecord) => {
+    setFormData({
+      slug: type.slug,
+      title: type.title,
+      description: type.description || "",
+      fileType: type.fileType || "pdf",
+      isActive: type.isActive ?? true,
+    });
+    setEditingType(type);
   };
 
   const handleSubmit = () => {
@@ -144,7 +207,11 @@ export default function AdminArtifactTypes() {
       return;
     }
 
-    createMutation.mutate(formData as InsertArtifactType);
+    if (editingType) {
+      updateMutation.mutate({ id: editingType.id, data: formData as Partial<InsertArtifactType> });
+    } else {
+      createMutation.mutate(formData as InsertArtifactType);
+    }
   };
 
   const handleDeleteType = () => {
@@ -166,7 +233,7 @@ export default function AdminArtifactTypes() {
     setFormData({
       ...formData,
       title,
-      slug: formData.slug || generateSlug(title),
+      slug: editingType ? formData.slug : (formData.slug || generateSlug(title)),
     });
   };
 
@@ -184,6 +251,9 @@ export default function AdminArtifactTypes() {
     return null;
   }
 
+  const isEditing = !!editingType;
+  const isDialogOpen = isCreateOpen || isEditing;
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -194,18 +264,27 @@ export default function AdminArtifactTypes() {
               Gerencie os tipos de documentos que podem ser gerados
             </p>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            if (!open) {
+              setIsCreateOpen(false);
+              setEditingType(null);
+              resetForm();
+            }
+          }}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm} data-testid="button-new-artifact-type">
+              <Button onClick={() => { resetForm(); setIsCreateOpen(true); }} data-testid="button-new-artifact-type">
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Tipo
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Criar Novo Tipo de Artefato</DialogTitle>
+                <DialogTitle>{isEditing ? "Editar Tipo de Artefato" : "Criar Novo Tipo de Artefato"}</DialogTitle>
                 <DialogDescription>
-                  Adicione um novo tipo de documento que pode ser gerado pela IA
+                  {isEditing 
+                    ? "Altere as informações do tipo de artefato"
+                    : "Adicione um novo tipo de documento que pode ser gerado pela IA"
+                  }
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -243,23 +322,57 @@ export default function AdminArtifactTypes() {
                     data-testid="input-type-description"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fileType">Formato de Arquivo Padrão</Label>
+                  <Select
+                    value={formData.fileType || "pdf"}
+                    onValueChange={(value) => setFormData({ ...formData, fileType: value })}
+                  >
+                    <SelectTrigger data-testid="select-file-type">
+                      <SelectValue placeholder="Selecione o formato" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(FILE_TYPES).map(([key, value]) => (
+                        <SelectItem key={value} value={value} data-testid={`option-file-type-${value}`}>
+                          {FILE_TYPE_LABELS[value]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Formato de exportação quando nenhum template for selecionado
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="isActive"
+                    checked={formData.isActive ?? true}
+                    onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                    data-testid="switch-is-active"
+                  />
+                  <Label htmlFor="isActive">Ativo</Label>
+                </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)} data-testid="button-cancel-create">
+                <Button 
+                  variant="outline" 
+                  onClick={() => { setIsCreateOpen(false); setEditingType(null); resetForm(); }} 
+                  data-testid="button-cancel-dialog"
+                >
                   Cancelar
                 </Button>
                 <Button
                   onClick={handleSubmit}
-                  disabled={createMutation.isPending}
+                  disabled={createMutation.isPending || updateMutation.isPending}
                   data-testid="button-save-type"
                 >
-                  {createMutation.isPending ? (
+                  {(createMutation.isPending || updateMutation.isPending) ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Criando...
+                      {isEditing ? "Salvando..." : "Criando..."}
                     </>
                   ) : (
-                    "Criar Tipo"
+                    isEditing ? "Salvar Alterações" : "Criar Tipo"
                   )}
                 </Button>
               </DialogFooter>
@@ -305,9 +418,14 @@ export default function AdminArtifactTypes() {
                       <FileText className="h-5 w-5 text-primary" />
                       <CardTitle className="text-lg">{type.title}</CardTitle>
                     </div>
-                    <Badge variant={type.isActive ? "default" : "secondary"}>
-                      {type.isActive ? "Ativo" : "Inativo"}
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className="text-xs">
+                        {FILE_TYPE_LABELS[type.fileType || "pdf"] || type.fileType?.toUpperCase()}
+                      </Badge>
+                      <Badge variant={type.isActive ? "default" : "secondary"}>
+                        {type.isActive ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
                   </div>
                   <CardDescription className="font-mono text-xs">
                     {type.slug}
@@ -319,47 +437,57 @@ export default function AdminArtifactTypes() {
                       {type.description}
                     </p>
                   )}
-                  <Dialog open={deletingType?.id === type.id} onOpenChange={(open) => !open && setDeletingType(null)}>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full text-destructive"
-                        onClick={() => setDeletingType(type)}
-                        data-testid={`button-delete-type-${type.id}`}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Excluir Tipo
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Excluir Tipo de Artefato</DialogTitle>
-                        <DialogDescription>
-                          Tem certeza que deseja excluir o tipo "{type.title}"? Esta ação não pode ser desfeita.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeletingType(null)} data-testid="button-cancel-delete">
-                          Cancelar
-                        </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => handleOpenEdit(type)}
+                      data-testid={`button-edit-type-${type.id}`}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Editar
+                    </Button>
+                    <Dialog open={deletingType?.id === type.id} onOpenChange={(open) => !open && setDeletingType(null)}>
+                      <DialogTrigger asChild>
                         <Button
-                          variant="destructive"
-                          onClick={handleDeleteType}
-                          disabled={deleteMutation.isPending}
-                          data-testid="button-confirm-delete"
+                          variant="outline"
+                          className="text-destructive"
+                          onClick={() => setDeletingType(type)}
+                          data-testid={`button-delete-type-${type.id}`}
                         >
-                          {deleteMutation.isPending ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Excluindo...
-                            </>
-                          ) : (
-                            "Excluir"
-                          )}
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Excluir Tipo de Artefato</DialogTitle>
+                          <DialogDescription>
+                            Tem certeza que deseja excluir o tipo "{type.title}"? Esta ação não pode ser desfeita.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setDeletingType(null)} data-testid="button-cancel-delete">
+                            Cancelar
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={handleDeleteType}
+                            disabled={deleteMutation.isPending}
+                            data-testid="button-confirm-delete"
+                          >
+                            {deleteMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Excluindo...
+                              </>
+                            ) : (
+                              "Excluir"
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </CardContent>
               </Card>
             ))}

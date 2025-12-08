@@ -77,12 +77,25 @@ export const templates = pgTable("templates", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// File type enum for artifact output format
+export const FILE_TYPES = {
+  PDF: "pdf",
+  DOCX: "docx",
+  XLSX: "xlsx",
+  CSV: "csv",
+  TXT: "txt",
+  MD: "md",
+} as const;
+
+export type FileType = (typeof FILE_TYPES)[keyof typeof FILE_TYPES];
+
 // Artifact types table for dynamic artifact type management
 export const artifactTypes = pgTable("artifact_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   slug: varchar("slug", { length: 50 }).notNull().unique(),
   title: varchar("title", { length: 100 }).notNull(),
   description: text("description"),
+  fileType: varchar("file_type", { length: 10 }).default("pdf").notNull(),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });

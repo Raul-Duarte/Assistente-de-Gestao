@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1765228945577,
+      "tag": "0000_add_file_type_to_artifact_types",
+      "breakpoints": true
+    }
+  ]
+}

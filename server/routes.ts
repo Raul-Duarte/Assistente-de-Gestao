@@ -759,6 +759,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/admin/artifact-types/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const { title, slug, description, fileType, isActive } = req.body;
+      const type = await storage.updateArtifactType(req.params.id, { 
+        title, 
+        slug, 
+        description, 
+        fileType,
+        isActive 
+      });
+      res.json(type);
+    } catch (error) {
+      console.error("Error updating artifact type:", error);
+      res.status(500).json({ message: "Failed to update artifact type" });
+    }
+  });
+
   app.delete("/api/admin/artifact-types/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
