@@ -20,6 +20,11 @@ import AdminProfiles from "@/pages/admin/profiles";
 import AdminPlans from "@/pages/admin/plans";
 import AdminArtifacts from "@/pages/admin/artifacts";
 import AdminArtifactTypes from "@/pages/admin/artifact-types";
+import AdminClients from "@/pages/admin/clients";
+import AdminSubscriptions from "@/pages/admin/subscriptions";
+import AdminInvoices from "@/pages/admin/invoices";
+import AdminPayments from "@/pages/admin/payments";
+import AdminReports from "@/pages/admin/reports";
 import Perfil from "@/pages/perfil";
 import NotFound from "@/pages/not-found";
 
@@ -42,6 +47,11 @@ function Router() {
       <Route path="/admin/planos" component={AdminPlans} />
       <Route path="/admin/artefatos" component={AdminArtifacts} />
       <Route path="/admin/tipos-artefatos" component={AdminArtifactTypes} />
+      <Route path="/admin/clientes" component={AdminClients} />
+      <Route path="/admin/assinaturas" component={AdminSubscriptions} />
+      <Route path="/admin/mensalidades" component={AdminInvoices} />
+      <Route path="/admin/pagamentos" component={AdminPayments} />
+      <Route path="/admin/relatorios" component={AdminReports} />
       <Route path="/perfil" component={Perfil} />
       <Route component={NotFound} />
     </Switch>

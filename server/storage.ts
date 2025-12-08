@@ -5,6 +5,10 @@ import {
   artifacts,
   templates,
   artifactTypes,
+  clients,
+  subscriptions,
+  invoices,
+  payments,
   type User,
   type UpsertUser,
   type Profile,
@@ -17,9 +21,17 @@ import {
   type InsertTemplate,
   type ArtifactTypeRecord,
   type InsertArtifactType,
+  type Client,
+  type InsertClient,
+  type Subscription,
+  type InsertSubscription,
+  type Invoice,
+  type InsertInvoice,
+  type Payment,
+  type InsertPayment,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, lt, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -66,6 +78,41 @@ export interface IStorage {
   getArtifactTypeBySlug(slug: string): Promise<ArtifactTypeRecord | undefined>;
   createArtifactType(data: InsertArtifactType): Promise<ArtifactTypeRecord>;
   deleteArtifactType(id: string): Promise<void>;
+
+  // Client operations
+  getClients(): Promise<Client[]>;
+  getClient(id: string): Promise<Client | undefined>;
+  getClientByCpf(cpf: string): Promise<Client | undefined>;
+  createClient(data: InsertClient): Promise<Client>;
+  updateClient(id: string, data: Partial<InsertClient>): Promise<Client>;
+  deleteClient(id: string): Promise<void>;
+  updateClientStatus(id: string, status: string): Promise<Client>;
+
+  // Subscription operations
+  getSubscriptions(): Promise<(Subscription & { client?: Client; plan?: Plan })[]>;
+  getSubscription(id: string): Promise<Subscription | undefined>;
+  getClientSubscriptions(clientId: string): Promise<(Subscription & { plan?: Plan })[]>;
+  createSubscription(data: InsertSubscription): Promise<Subscription>;
+  updateSubscription(id: string, data: Partial<InsertSubscription>): Promise<Subscription>;
+  cancelSubscription(id: string): Promise<Subscription>;
+  activateSubscription(id: string): Promise<Subscription>;
+
+  // Invoice operations
+  getInvoices(): Promise<(Invoice & { client?: Client; subscription?: Subscription })[]>;
+  getInvoice(id: string): Promise<Invoice | undefined>;
+  getClientInvoices(clientId: string): Promise<Invoice[]>;
+  getSubscriptionInvoices(subscriptionId: string): Promise<Invoice[]>;
+  createInvoice(data: InsertInvoice): Promise<Invoice>;
+  updateInvoice(id: string, data: Partial<InsertInvoice>): Promise<Invoice>;
+  updateInvoiceStatus(id: string, status: string): Promise<Invoice>;
+  getOverdueInvoices(): Promise<Invoice[]>;
+
+  // Payment operations
+  getPayments(): Promise<(Payment & { client?: Client; invoice?: Invoice })[]>;
+  getPayment(id: string): Promise<Payment | undefined>;
+  getClientPayments(clientId: string): Promise<Payment[]>;
+  getInvoicePayments(invoiceId: string): Promise<Payment[]>;
+  createPayment(data: InsertPayment): Promise<Payment>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -304,6 +351,249 @@ export class DatabaseStorage implements IStorage {
 
   async deleteArtifactType(id: string): Promise<void> {
     await db.delete(artifactTypes).where(eq(artifactTypes.id, id));
+  }
+
+  // ==========================================
+  // CLIENT OPERATIONS
+  // ==========================================
+
+  async getClients(): Promise<Client[]> {
+    return db.select().from(clients).orderBy(clients.name);
+  }
+
+  async getClient(id: string): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(eq(clients.id, id));
+    return client;
+  }
+
+  async getClientByCpf(cpf: string): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(eq(clients.cpf, cpf));
+    return client;
+  }
+
+  async createClient(data: InsertClient): Promise<Client> {
+    const [client] = await db.insert(clients).values({
+      ...data,
+      status: "ativo",
+    }).returning();
+    return client;
+  }
+
+  async updateClient(id: string, data: Partial<InsertClient>): Promise<Client> {
+    const [client] = await db
+      .update(clients)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(clients.id, id))
+      .returning();
+    return client;
+  }
+
+  async deleteClient(id: string): Promise<void> {
+    await db.delete(clients).where(eq(clients.id, id));
+  }
+
+  async updateClientStatus(id: string, status: string): Promise<Client> {
+    const [client] = await db
+      .update(clients)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(clients.id, id))
+      .returning();
+    return client;
+  }
+
+  // ==========================================
+  // SUBSCRIPTION OPERATIONS
+  // ==========================================
+
+  async getSubscriptions(): Promise<(Subscription & { client?: Client; plan?: Plan })[]> {
+    const result = await db
+      .select()
+      .from(subscriptions)
+      .leftJoin(clients, eq(subscriptions.clientId, clients.id))
+      .leftJoin(plans, eq(subscriptions.planId, plans.id))
+      .orderBy(desc(subscriptions.createdAt));
+
+    return result.map((row) => ({
+      ...row.subscriptions,
+      client: row.clients || undefined,
+      plan: row.plans || undefined,
+    }));
+  }
+
+  async getSubscription(id: string): Promise<Subscription | undefined> {
+    const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.id, id));
+    return subscription;
+  }
+
+  async getClientSubscriptions(clientId: string): Promise<(Subscription & { plan?: Plan })[]> {
+    const result = await db
+      .select()
+      .from(subscriptions)
+      .leftJoin(plans, eq(subscriptions.planId, plans.id))
+      .where(eq(subscriptions.clientId, clientId))
+      .orderBy(desc(subscriptions.createdAt));
+
+    return result.map((row) => ({
+      ...row.subscriptions,
+      plan: row.plans || undefined,
+    }));
+  }
+
+  async createSubscription(data: InsertSubscription): Promise<Subscription> {
+    const [subscription] = await db.insert(subscriptions).values({
+      ...data,
+      status: "ativa",
+    }).returning();
+    return subscription;
+  }
+
+  async updateSubscription(id: string, data: Partial<InsertSubscription>): Promise<Subscription> {
+    const [subscription] = await db
+      .update(subscriptions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return subscription;
+  }
+
+  async cancelSubscription(id: string): Promise<Subscription> {
+    const [subscription] = await db
+      .update(subscriptions)
+      .set({ status: "cancelada", updatedAt: new Date() })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return subscription;
+  }
+
+  async activateSubscription(id: string): Promise<Subscription> {
+    const [subscription] = await db
+      .update(subscriptions)
+      .set({ status: "ativa", updatedAt: new Date() })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return subscription;
+  }
+
+  // ==========================================
+  // INVOICE OPERATIONS
+  // ==========================================
+
+  async getInvoices(): Promise<(Invoice & { client?: Client; subscription?: Subscription })[]> {
+    const result = await db
+      .select()
+      .from(invoices)
+      .leftJoin(clients, eq(invoices.clientId, clients.id))
+      .leftJoin(subscriptions, eq(invoices.subscriptionId, subscriptions.id))
+      .orderBy(desc(invoices.dueDate));
+
+    return result.map((row) => ({
+      ...row.invoices,
+      client: row.clients || undefined,
+      subscription: row.subscriptions || undefined,
+    }));
+  }
+
+  async getInvoice(id: string): Promise<Invoice | undefined> {
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
+    return invoice;
+  }
+
+  async getClientInvoices(clientId: string): Promise<Invoice[]> {
+    return db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.clientId, clientId))
+      .orderBy(desc(invoices.dueDate));
+  }
+
+  async getSubscriptionInvoices(subscriptionId: string): Promise<Invoice[]> {
+    return db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.subscriptionId, subscriptionId))
+      .orderBy(desc(invoices.dueDate));
+  }
+
+  async createInvoice(data: InsertInvoice): Promise<Invoice> {
+    const [invoice] = await db.insert(invoices).values(data).returning();
+    return invoice;
+  }
+
+  async updateInvoice(id: string, data: Partial<InsertInvoice>): Promise<Invoice> {
+    const [invoice] = await db
+      .update(invoices)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(invoices.id, id))
+      .returning();
+    return invoice;
+  }
+
+  async updateInvoiceStatus(id: string, status: string): Promise<Invoice> {
+    const [invoice] = await db
+      .update(invoices)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(invoices.id, id))
+      .returning();
+    return invoice;
+  }
+
+  async getOverdueInvoices(): Promise<Invoice[]> {
+    const now = new Date();
+    return db
+      .select()
+      .from(invoices)
+      .where(and(
+        eq(invoices.status, "pendente"),
+        lt(invoices.dueDate, now)
+      ));
+  }
+
+  // ==========================================
+  // PAYMENT OPERATIONS
+  // ==========================================
+
+  async getPayments(): Promise<(Payment & { client?: Client; invoice?: Invoice })[]> {
+    const result = await db
+      .select()
+      .from(payments)
+      .leftJoin(clients, eq(payments.clientId, clients.id))
+      .leftJoin(invoices, eq(payments.invoiceId, invoices.id))
+      .orderBy(desc(payments.paymentDate));
+
+    return result.map((row) => ({
+      ...row.payments,
+      client: row.clients || undefined,
+      invoice: row.invoices || undefined,
+    }));
+  }
+
+  async getPayment(id: string): Promise<Payment | undefined> {
+    const [payment] = await db.select().from(payments).where(eq(payments.id, id));
+    return payment;
+  }
+
+  async getClientPayments(clientId: string): Promise<Payment[]> {
+    return db
+      .select()
+      .from(payments)
+      .where(eq(payments.clientId, clientId))
+      .orderBy(desc(payments.paymentDate));
+  }
+
+  async getInvoicePayments(invoiceId: string): Promise<Payment[]> {
+    return db
+      .select()
+      .from(payments)
+      .where(eq(payments.invoiceId, invoiceId))
+      .orderBy(desc(payments.paymentDate));
+  }
+
+  async createPayment(data: InsertPayment): Promise<Payment> {
+    const [payment] = await db.insert(payments).values({
+      ...data,
+      status: "aprovado",
+    }).returning();
+    return payment;
   }
 }
 

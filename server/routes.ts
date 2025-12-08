@@ -776,6 +776,537 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==========================================
+  // CLIENT ROUTES
+  // ==========================================
+
+  const createClientSchema = z.object({
+    name: z.string().min(1, "Nome é obrigatório"),
+    email: z.string().email("Email inválido"),
+    phone: z.string().optional(),
+    cpf: z.string().min(11, "CPF inválido").max(14, "CPF inválido"),
+    address: z.string().optional(),
+  });
+
+  app.get("/api/admin/clients", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const clients = await storage.getClients();
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching clients:", error);
+      res.status(500).json({ message: "Failed to fetch clients" });
+    }
+  });
+
+  app.get("/api/admin/clients/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const client = await storage.getClient(req.params.id);
+      if (!client) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      res.json(client);
+    } catch (error) {
+      console.error("Error fetching client:", error);
+      res.status(500).json({ message: "Failed to fetch client" });
+    }
+  });
+
+  app.post("/api/admin/clients", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const data = createClientSchema.parse(req.body);
+      
+      // Check if CPF already exists
+      const existing = await storage.getClientByCpf(data.cpf);
+      if (existing) {
+        return res.status(400).json({ message: "Já existe um cliente com este CPF" });
+      }
+
+      const client = await storage.createClient(data);
+      res.json(client);
+    } catch (error: any) {
+      console.error("Error creating client:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create client" });
+    }
+  });
+
+  app.patch("/api/admin/clients/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const client = await storage.updateClient(req.params.id, req.body);
+      res.json(client);
+    } catch (error) {
+      console.error("Error updating client:", error);
+      res.status(500).json({ message: "Failed to update client" });
+    }
+  });
+
+  app.delete("/api/admin/clients/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      await storage.deleteClient(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting client:", error);
+      res.status(500).json({ message: "Failed to delete client" });
+    }
+  });
+
+  // ==========================================
+  // SUBSCRIPTION ROUTES
+  // ==========================================
+
+  const createSubscriptionSchema = z.object({
+    clientId: z.string().min(1, "Cliente é obrigatório"),
+    planId: z.string().min(1, "Plano é obrigatório"),
+    startDate: z.string().min(1, "Data de início é obrigatória"),
+    billingDay: z.number().min(1).max(28).optional(),
+  });
+
+  app.get("/api/admin/subscriptions", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const subscriptions = await storage.getSubscriptions();
+      res.json(subscriptions);
+    } catch (error) {
+      console.error("Error fetching subscriptions:", error);
+      res.status(500).json({ message: "Failed to fetch subscriptions" });
+    }
+  });
+
+  app.get("/api/admin/subscriptions/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const subscription = await storage.getSubscription(req.params.id);
+      if (!subscription) {
+        return res.status(404).json({ message: "Assinatura não encontrada" });
+      }
+      res.json(subscription);
+    } catch (error) {
+      console.error("Error fetching subscription:", error);
+      res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+
+  app.get("/api/admin/clients/:clientId/subscriptions", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const subscriptions = await storage.getClientSubscriptions(req.params.clientId);
+      res.json(subscriptions);
+    } catch (error) {
+      console.error("Error fetching client subscriptions:", error);
+      res.status(500).json({ message: "Failed to fetch subscriptions" });
+    }
+  });
+
+  app.post("/api/admin/subscriptions", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const data = createSubscriptionSchema.parse(req.body);
+      
+      // Verify client exists
+      const client = await storage.getClient(data.clientId);
+      if (!client) {
+        return res.status(400).json({ message: "Cliente não encontrado" });
+      }
+
+      // Verify plan exists
+      const plan = await storage.getPlan(data.planId);
+      if (!plan) {
+        return res.status(400).json({ message: "Plano não encontrado" });
+      }
+
+      const subscription = await storage.createSubscription({
+        clientId: data.clientId,
+        planId: data.planId,
+        startDate: new Date(data.startDate),
+        billingDay: data.billingDay || new Date(data.startDate).getDate(),
+        status: "ativa",
+      });
+
+      // Create first invoice (auto-approved as per requirements - no gateway yet)
+      const now = new Date();
+      const referenceMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const dueDate = new Date(data.startDate);
+
+      await storage.createInvoice({
+        subscriptionId: subscription.id,
+        clientId: data.clientId,
+        amount: plan.price || 0,
+        dueDate,
+        status: "paga", // Auto-approved as per requirements
+        referenceMonth,
+      });
+
+      res.json(subscription);
+    } catch (error: any) {
+      console.error("Error creating subscription:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create subscription" });
+    }
+  });
+
+  app.patch("/api/admin/subscriptions/:id/cancel", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const subscription = await storage.cancelSubscription(req.params.id);
+      res.json(subscription);
+    } catch (error) {
+      console.error("Error canceling subscription:", error);
+      res.status(500).json({ message: "Failed to cancel subscription" });
+    }
+  });
+
+  app.patch("/api/admin/subscriptions/:id/activate", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const subscription = await storage.activateSubscription(req.params.id);
+      res.json(subscription);
+    } catch (error) {
+      console.error("Error activating subscription:", error);
+      res.status(500).json({ message: "Failed to activate subscription" });
+    }
+  });
+
+  // ==========================================
+  // INVOICE ROUTES
+  // ==========================================
+
+  app.get("/api/admin/invoices", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const invoices = await storage.getInvoices();
+      res.json(invoices);
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      res.status(500).json({ message: "Failed to fetch invoices" });
+    }
+  });
+
+  app.get("/api/admin/invoices/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const invoice = await storage.getInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ message: "Mensalidade não encontrada" });
+      }
+      res.json(invoice);
+    } catch (error) {
+      console.error("Error fetching invoice:", error);
+      res.status(500).json({ message: "Failed to fetch invoice" });
+    }
+  });
+
+  app.get("/api/admin/clients/:clientId/invoices", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const invoices = await storage.getClientInvoices(req.params.clientId);
+      res.json(invoices);
+    } catch (error) {
+      console.error("Error fetching client invoices:", error);
+      res.status(500).json({ message: "Failed to fetch invoices" });
+    }
+  });
+
+  app.patch("/api/admin/invoices/:id/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const { status } = req.body;
+      if (!["pendente", "paga", "atrasada"].includes(status)) {
+        return res.status(400).json({ message: "Status inválido" });
+      }
+
+      const invoice = await storage.updateInvoiceStatus(req.params.id, status);
+      
+      // Update client status based on overdue invoices
+      const clientInvoices = await storage.getClientInvoices(invoice.clientId);
+      const hasOverdue = clientInvoices.some(inv => inv.status === "atrasada");
+      const newClientStatus = hasOverdue ? "inadimplente" : "ativo";
+      await storage.updateClientStatus(invoice.clientId, newClientStatus);
+
+      res.json(invoice);
+    } catch (error) {
+      console.error("Error updating invoice status:", error);
+      res.status(500).json({ message: "Failed to update invoice status" });
+    }
+  });
+
+  // ==========================================
+  // PAYMENT ROUTES
+  // ==========================================
+
+  const createPaymentSchema = z.object({
+    invoiceId: z.string().min(1, "Mensalidade é obrigatória"),
+    amount: z.number().min(1, "Valor é obrigatório"),
+    paymentMethod: z.string().optional(),
+    notes: z.string().optional(),
+  });
+
+  app.get("/api/admin/payments", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const payments = await storage.getPayments();
+      res.json(payments);
+    } catch (error) {
+      console.error("Error fetching payments:", error);
+      res.status(500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.get("/api/admin/clients/:clientId/payments", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const payments = await storage.getClientPayments(req.params.clientId);
+      res.json(payments);
+    } catch (error) {
+      console.error("Error fetching client payments:", error);
+      res.status(500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.post("/api/admin/payments", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const data = createPaymentSchema.parse(req.body);
+      
+      // Verify invoice exists
+      const invoice = await storage.getInvoice(data.invoiceId);
+      if (!invoice) {
+        return res.status(400).json({ message: "Mensalidade não encontrada" });
+      }
+
+      // Validate payment amount
+      if (data.amount < invoice.amount) {
+        return res.status(400).json({ message: "Valor pago não pode ser menor que o valor da mensalidade" });
+      }
+
+      const payment = await storage.createPayment({
+        invoiceId: data.invoiceId,
+        clientId: invoice.clientId,
+        amount: data.amount,
+        paymentMethod: data.paymentMethod || "manual",
+        notes: data.notes,
+        status: "aprovado",
+      });
+
+      // Update invoice status to paid
+      await storage.updateInvoiceStatus(data.invoiceId, "paga");
+
+      // Update client status - check if all overdue invoices are paid
+      const clientInvoices = await storage.getClientInvoices(invoice.clientId);
+      const hasOverdue = clientInvoices.some(inv => inv.status === "atrasada");
+      const newClientStatus = hasOverdue ? "inadimplente" : "ativo";
+      await storage.updateClientStatus(invoice.clientId, newClientStatus);
+
+      res.json(payment);
+    } catch (error: any) {
+      console.error("Error creating payment:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create payment" });
+    }
+  });
+
+  // ==========================================
+  // REPORTS ROUTES
+  // ==========================================
+
+  app.get("/api/admin/reports/active-clients", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const allClients = await storage.getClients();
+      const activeClients = allClients.filter(c => c.status === "ativo");
+      res.json({ clients: activeClients, total: activeClients.length });
+    } catch (error) {
+      console.error("Error fetching active clients report:", error);
+      res.status(500).json({ message: "Failed to fetch report" });
+    }
+  });
+
+  app.get("/api/admin/reports/overdue-clients", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const allClients = await storage.getClients();
+      const overdueClients = allClients.filter(c => c.status === "inadimplente");
+      res.json({ clients: overdueClients, total: overdueClients.length });
+    } catch (error) {
+      console.error("Error fetching overdue clients report:", error);
+      res.status(500).json({ message: "Failed to fetch report" });
+    }
+  });
+
+  app.get("/api/admin/reports/financial", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const invoices = await storage.getInvoices();
+      const payments = await storage.getPayments();
+
+      // Group by reference month
+      const byMonth: Record<string, { invoiced: number; paid: number; pending: number; overdue: number }> = {};
+      
+      for (const invoice of invoices) {
+        const month = invoice.referenceMonth;
+        if (!byMonth[month]) {
+          byMonth[month] = { invoiced: 0, paid: 0, pending: 0, overdue: 0 };
+        }
+        byMonth[month].invoiced += invoice.amount;
+        if (invoice.status === "paga") {
+          byMonth[month].paid += invoice.amount;
+        } else if (invoice.status === "atrasada") {
+          byMonth[month].overdue += invoice.amount;
+        } else {
+          byMonth[month].pending += invoice.amount;
+        }
+      }
+
+      const totals = {
+        totalInvoiced: invoices.reduce((sum, inv) => sum + inv.amount, 0),
+        totalPaid: invoices.filter(inv => inv.status === "paga").reduce((sum, inv) => sum + inv.amount, 0),
+        totalPending: invoices.filter(inv => inv.status === "pendente").reduce((sum, inv) => sum + inv.amount, 0),
+        totalOverdue: invoices.filter(inv => inv.status === "atrasada").reduce((sum, inv) => sum + inv.amount, 0),
+      };
+
+      res.json({ byMonth, totals });
+    } catch (error) {
+      console.error("Error fetching financial report:", error);
+      res.status(500).json({ message: "Failed to fetch report" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

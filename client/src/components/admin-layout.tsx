@@ -37,6 +37,11 @@ import {
   FileText,
   FileStack,
   Layers,
+  UserCircle,
+  CreditCard,
+  Receipt,
+  Wallet,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Profile } from "@shared/schema";
@@ -89,6 +94,34 @@ const managementItems = [
     title: "Tipos de Artefatos",
     url: "/admin/tipos-artefatos",
     icon: Layers,
+  },
+];
+
+const financialItems = [
+  {
+    title: "Clientes",
+    url: "/admin/clientes",
+    icon: UserCircle,
+  },
+  {
+    title: "Assinaturas",
+    url: "/admin/assinaturas",
+    icon: CreditCard,
+  },
+  {
+    title: "Mensalidades",
+    url: "/admin/mensalidades",
+    icon: Receipt,
+  },
+  {
+    title: "Pagamentos",
+    url: "/admin/pagamentos",
+    icon: Wallet,
+  },
+  {
+    title: "Relatórios",
+    url: "/admin/relatorios",
+    icon: BarChart3,
   },
 ];
 
@@ -158,6 +191,30 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {managementItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location === item.url}
+                          data-testid={`nav-${item.url.replace(/\//g, "-").slice(1)}`}
+                        >
+                          <a href={item.url}>
+                            <item.icon />
+                            <span>{item.title}</span>
+                          </a>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+
+            {isAdmin && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Gestão Financeira</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {financialItems.map((item) => (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton
                           asChild
