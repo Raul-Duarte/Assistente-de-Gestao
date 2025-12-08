@@ -14,9 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   FileText,
-  CheckSquare,
-  ArrowUpRight,
-  AlertTriangle,
   Loader2,
   Download,
   Sparkles,
@@ -24,7 +21,7 @@ import {
   FileArchive,
   X,
 } from "lucide-react";
-import { ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType, type Plan, type Artifact, type Template } from "@shared/schema";
+import { type Plan, type Artifact, type Template, type ArtifactTypeRecord } from "@shared/schema";
 import {
   Select,
   SelectContent,
@@ -33,45 +30,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const artifactOptions = [
-  {
-    id: ARTIFACT_TYPES.BUSINESS_RULES,
-    icon: FileText,
-    label: ARTIFACT_TYPE_LABELS[ARTIFACT_TYPES.BUSINESS_RULES],
-    description: "Regras e diretrizes de negócio discutidas",
-    availableIn: ["free", "plus", "premium"],
-  },
-  {
-    id: ARTIFACT_TYPES.ACTION_POINTS,
-    icon: CheckSquare,
-    label: ARTIFACT_TYPE_LABELS[ARTIFACT_TYPES.ACTION_POINTS],
-    description: "Tarefas e ações a serem executadas",
-    availableIn: ["plus", "premium"],
-  },
-  {
-    id: ARTIFACT_TYPES.REFERRALS,
-    icon: ArrowUpRight,
-    label: ARTIFACT_TYPE_LABELS[ARTIFACT_TYPES.REFERRALS],
-    description: "Encaminhamentos e próximos passos",
-    availableIn: ["plus", "premium"],
-  },
-  {
-    id: ARTIFACT_TYPES.CRITICAL_POINTS,
-    icon: AlertTriangle,
-    label: ARTIFACT_TYPE_LABELS[ARTIFACT_TYPES.CRITICAL_POINTS],
-    description: "Pontos que requerem atenção especial",
-    availableIn: ["premium"],
-  },
-];
-
 export default function Artefatos() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [selectedTypes, setSelectedTypes] = useState<ArtifactType[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [transcription, setTranscription] = useState("");
   const [generatedArtifacts, setGeneratedArtifacts] = useState<Artifact[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const { data: artifactTypes = [], isLoading: typesLoading } = useQuery<ArtifactTypeRecord[]>({
+    queryKey: ["/api/artifact-types"],
+    enabled: isAuthenticated,
+  });
 
   const { data: templates = [] } = useQuery<Template[]>({
     queryKey: ["/api/templates"],
@@ -97,7 +68,7 @@ export default function Artefatos() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: async (data: { types: ArtifactType[]; transcription: string; templateId?: string }) => {
+    mutationFn: async (data: { types: string[]; transcription: string; templateId?: string }) => {
       const controller = new AbortController();
       abortControllerRef.current = controller;
       try {
@@ -237,7 +208,7 @@ export default function Artefatos() {
     downloadAllMutation.mutate(artifactIds);
   };
 
-  const handleTypeToggle = (type: ArtifactType) => {
+  const handleTypeToggle = (type: string) => {
     setSelectedTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
@@ -267,9 +238,14 @@ export default function Artefatos() {
     });
   };
 
-  const isTypeAvailable = (availableIn: string[]): boolean => {
-    if (!userPlan) return availableIn.includes("free");
-    return availableIn.includes(userPlan.slug);
+  const isTypeAvailable = (typeSlug: string): boolean => {
+    if (!userPlan?.tools) return false;
+    const tools = userPlan.tools as string[];
+    // If plan has all 4 legacy types, grant access to all active types (Premium behavior)
+    const legacyTypes = ['business_rules', 'action_points', 'referrals', 'critical_points'];
+    const hasAllLegacyTypes = legacyTypes.every(t => tools.includes(t));
+    if (hasAllLegacyTypes) return true;
+    return tools.includes(typeSlug);
   };
 
   if (authLoading) {
@@ -309,22 +285,28 @@ export default function Artefatos() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {planLoading ? (
+            {planLoading || typesLoading ? (
               <div className="grid sm:grid-cols-2 gap-4">
                 <Skeleton className="h-24" />
                 <Skeleton className="h-24" />
                 <Skeleton className="h-24" />
                 <Skeleton className="h-24" />
               </div>
+            ) : artifactTypes.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum tipo de artefato disponível.</p>
+                <p className="text-sm">Contate o administrador.</p>
+              </div>
             ) : (
               <div className="grid sm:grid-cols-2 gap-4">
-                {artifactOptions.map((option) => {
-                  const available = isTypeAvailable(option.availableIn);
-                  const isSelected = selectedTypes.includes(option.id);
+                {artifactTypes.filter(t => t.isActive).map((artifactType) => {
+                  const available = isTypeAvailable(artifactType.slug);
+                  const isSelected = selectedTypes.includes(artifactType.slug);
 
                   return (
                     <div
-                      key={option.id}
+                      key={artifactType.id}
                       className={`relative flex items-start gap-4 p-4 rounded-lg border transition-colors ${
                         available
                           ? isSelected
@@ -332,31 +314,32 @@ export default function Artefatos() {
                             : "hover:border-primary/50 cursor-pointer"
                           : "opacity-60 cursor-not-allowed bg-muted/30"
                       }`}
-                      onClick={() => available && handleTypeToggle(option.id)}
-                      data-testid={`artifact-option-${option.id}`}
+                      onClick={() => available && handleTypeToggle(artifactType.slug)}
+                      data-testid={`artifact-option-${artifactType.slug}`}
                     >
                       <Checkbox
                         checked={isSelected}
                         disabled={!available}
-                        onCheckedChange={() => available && handleTypeToggle(option.id)}
+                        onCheckedChange={() => available && handleTypeToggle(artifactType.slug)}
                         className="mt-1"
-                        data-testid={`checkbox-${option.id}`}
+                        data-testid={`checkbox-${artifactType.slug}`}
                       />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <option.icon className="h-4 w-4 text-primary" />
-                          <span className="font-medium" data-testid={`label-${option.id}`}>{option.label}</span>
+                          <FileText className="h-4 w-4 text-primary" />
+                          <span className="font-medium" data-testid={`label-${artifactType.slug}`}>{artifactType.title}</span>
                           {!available && (
                             <Lock className="h-3 w-3 text-muted-foreground" />
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {option.description}
-                        </p>
+                        {artifactType.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {artifactType.description}
+                          </p>
+                        )}
                         {!available && (
-                          <Badge variant="outline" className="mt-2 text-xs" data-testid={`badge-upgrade-${option.id}`}>
-                            Disponível no plano{" "}
-                            {option.availableIn[0] === "plus" ? "Plus" : "Premium"}
+                          <Badge variant="outline" className="mt-2 text-xs" data-testid={`badge-upgrade-${artifactType.slug}`}>
+                            Não disponível no seu plano
                           </Badge>
                         )}
                       </div>
@@ -525,7 +508,7 @@ export default function Artefatos() {
                       <div>
                         <p className="font-medium" data-testid={`artifact-title-${artifact.id}`}>{artifact.title}</p>
                         <p className="text-sm text-muted-foreground">
-                          {ARTIFACT_TYPE_LABELS[artifact.type as ArtifactType]}
+                          {artifact.type}
                         </p>
                       </div>
                     </div>

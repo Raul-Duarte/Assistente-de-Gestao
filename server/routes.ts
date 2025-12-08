@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { generateArtifactContent } from "./openai";
-import { insertProfileSchema, insertPlanSchema, createManualUserSchema, ARTIFACT_TYPES, ARTIFACT_TYPE_LABELS, type ArtifactType } from "@shared/schema";
+import { insertProfileSchema, insertPlanSchema, createManualUserSchema, ARTIFACT_TYPES } from "@shared/schema";
 import { z } from "zod";
 import PDFDocument from "pdfkit";
 
@@ -58,12 +58,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const generateArtifactsSchema = z.object({
-    types: z.array(z.enum([
-      ARTIFACT_TYPES.BUSINESS_RULES,
-      ARTIFACT_TYPES.ACTION_POINTS,
-      ARTIFACT_TYPES.REFERRALS,
-      ARTIFACT_TYPES.CRITICAL_POINTS,
-    ])),
+    types: z.array(z.string()).min(1, "Selecione pelo menos um tipo"),
     transcription: z.string().min(10, "Transcrição muito curta"),
     templateId: z.string().optional(),
   });
@@ -75,16 +70,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check user plan access
       const plan = await storage.getUserPlan(userId);
-      const allowedTools = plan?.tools || [ARTIFACT_TYPES.BUSINESS_RULES];
+      const allowedTools = (plan?.tools as string[]) || [ARTIFACT_TYPES.BUSINESS_RULES];
+      
+      // Check if plan has all legacy types (Premium behavior - grants access to all types)
+      const legacyTypes = ['business_rules', 'action_points', 'referrals', 'critical_points'];
+      const hasAllLegacyTypes = legacyTypes.every(t => allowedTools.includes(t));
 
-      // Filter types based on plan
-      const accessibleTypes = types.filter((type) => allowedTools.includes(type));
+      // Filter types based on plan (Premium users with all legacy types get access to all)
+      const accessibleTypes = hasAllLegacyTypes 
+        ? types 
+        : types.filter((type) => allowedTools.includes(type));
 
       if (accessibleTypes.length === 0) {
         return res.status(403).json({
           message: "Seu plano não permite acesso a essas ferramentas. Faça upgrade para desbloquear.",
         });
       }
+
+      // Get all artifact types from database for lookup
+      const allArtifactTypes = await storage.getArtifactTypes();
+      const typeMap = new Map(allArtifactTypes.map(t => [t.slug, t]));
 
       // Get template content if templateId is provided
       let templateContent: string | undefined;
@@ -101,13 +106,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const generatedArtifacts = [];
 
-      for (const type of accessibleTypes) {
-        const content = await generateArtifactContent(type as ArtifactType, transcription, templateContent);
-        const title = `${ARTIFACT_TYPE_LABELS[type as ArtifactType]} - ${new Date().toLocaleDateString("pt-BR")}`;
+      for (const typeSlug of accessibleTypes) {
+        const artifactType = typeMap.get(typeSlug);
+        const typeName = artifactType?.title || typeSlug;
+        const typeDescription = artifactType?.description;
+        
+        const content = await generateArtifactContent(typeSlug, typeName, transcription, typeDescription, templateContent);
+        const title = `${typeName} - ${new Date().toLocaleDateString("pt-BR")}`;
 
         const artifact = await storage.createArtifact({
           userId,
-          type,
+          type: typeSlug,
           title,
           content,
           transcription,
@@ -666,6 +675,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting template:", error);
       res.status(500).json({ message: "Failed to delete template" });
+    }
+  });
+
+  // Artifact types routes (public list, admin CRUD)
+  app.get("/api/artifact-types", async (_req, res) => {
+    try {
+      const types = await storage.getArtifactTypes();
+      res.json(types);
+    } catch (error) {
+      console.error("Error fetching artifact types:", error);
+      res.status(500).json({ message: "Failed to fetch artifact types" });
+    }
+  });
+
+  const createArtifactTypeSchema = z.object({
+    slug: z.string().min(1, "Slug é obrigatório").regex(/^[a-z0-9_]+$/, "Slug deve conter apenas letras minúsculas, números e underscore"),
+    title: z.string().min(1, "Título é obrigatório"),
+    description: z.string().optional(),
+    isActive: z.boolean().optional().default(true),
+  });
+
+  app.post("/api/admin/artifact-types", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      const data = createArtifactTypeSchema.parse(req.body);
+      
+      // Check if slug already exists
+      const existing = await storage.getArtifactTypeBySlug(data.slug);
+      if (existing) {
+        return res.status(400).json({ message: "Já existe um tipo de artefato com este slug" });
+      }
+
+      const type = await storage.createArtifactType(data);
+      res.json(type);
+    } catch (error: any) {
+      console.error("Error creating artifact type:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create artifact type" });
+    }
+  });
+
+  app.delete("/api/admin/artifact-types/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userProfile = await storage.getUserProfile(userId);
+      
+      if (userProfile?.name !== "Administrador") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
+      await storage.deleteArtifactType(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting artifact type:", error);
+      res.status(500).json({ message: "Failed to delete artifact type" });
     }
   });
 

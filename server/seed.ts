@@ -1,9 +1,41 @@
 import { db } from "./db";
-import { profiles, plans } from "@shared/schema";
+import { profiles, plans, artifactTypes } from "@shared/schema";
 import { ARTIFACT_TYPES } from "@shared/schema";
 
 export async function seedDatabase() {
   console.log("Seeding database...");
+
+  // Check if artifact types exist
+  const existingArtifactTypes = await db.select().from(artifactTypes);
+  if (existingArtifactTypes.length === 0) {
+    console.log("Creating default artifact types...");
+    await db.insert(artifactTypes).values([
+      {
+        slug: "business_rules",
+        title: "Regras de Negócio",
+        description: "Extrai políticas e diretrizes de negócio da transcrição",
+        isActive: true,
+      },
+      {
+        slug: "action_points",
+        title: "Pontos de Ação",
+        description: "Identifica tarefas com responsáveis e prazos",
+        isActive: true,
+      },
+      {
+        slug: "referrals",
+        title: "Encaminhamentos",
+        description: "Documenta handoffs e próximos passos",
+        isActive: true,
+      },
+      {
+        slug: "critical_points",
+        title: "Pontos Críticos",
+        description: "Destaca riscos e decisões importantes",
+        isActive: true,
+      },
+    ]);
+  }
 
   // Check if profiles exist
   const existingProfiles = await db.select().from(profiles);

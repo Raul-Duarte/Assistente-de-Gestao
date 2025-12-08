@@ -1,9 +1,9 @@
 import OpenAI from "openai";
-import { ARTIFACT_TYPE_LABELS, type ArtifactType } from "@shared/schema";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const systemPrompts: Record<ArtifactType, string> = {
+// Legacy prompts for backward compatibility with seeded types
+const legacyPrompts: Record<string, string> = {
   business_rules: `Você é um especialista em análise de reuniões corporativas. Sua tarefa é extrair e documentar REGRAS DE NEGÓCIO a partir da transcrição fornecida.
 
 Regras de Negócio são diretrizes, políticas, condições ou restrições que definem como os processos da empresa devem funcionar.
@@ -61,13 +61,28 @@ Formate sua resposta em Markdown com:
 Seja objetivo e profissional. Extraia apenas informações presentes na transcrição.`,
 };
 
+function getDefaultPrompt(typeName: string, typeDescription?: string | null): string {
+  return `Você é um especialista em análise de reuniões corporativas. Sua tarefa é extrair e documentar "${typeName}" a partir da transcrição fornecida.
+
+${typeDescription || `${typeName} são informações relevantes identificadas na reunião.`}
+
+Formate sua resposta em Markdown com:
+1. Um título claro
+2. Uma breve introdução contextualizando as informações
+3. Uma lista organizada com os pontos identificados
+
+Seja objetivo e profissional. Extraia apenas informações presentes na transcrição.`;
+}
+
 export async function generateArtifactContent(
-  type: ArtifactType,
+  typeSlug: string,
+  typeName: string,
   transcription: string,
+  typeDescription?: string | null,
   templateContent?: string
 ): Promise<string> {
-  let systemPrompt = systemPrompts[type];
-  const typeName = ARTIFACT_TYPE_LABELS[type];
+  // Use legacy prompt if available, otherwise generate default
+  let systemPrompt = legacyPrompts[typeSlug] || getDefaultPrompt(typeName, typeDescription);
 
   // Append template instructions if provided
   if (templateContent) {
@@ -89,7 +104,7 @@ export async function generateArtifactContent(
 
     return response.choices[0].message.content || `Não foi possível extrair ${typeName} da transcrição fornecida.`;
   } catch (error: any) {
-    console.error(`Error generating artifact (${type}):`, error);
+    console.error(`Error generating artifact (${typeSlug}):`, error);
     throw new Error(`Falha ao gerar ${typeName}: ${error.message}`);
   }
 }

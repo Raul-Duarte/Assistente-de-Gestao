@@ -36,6 +36,7 @@ import {
   User,
   FileText,
   FileStack,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Profile } from "@shared/schema";
@@ -83,6 +84,11 @@ const managementItems = [
     title: "Artefatos Gerados",
     url: "/admin/artefatos",
     icon: FileText,
+  },
+  {
+    title: "Tipos de Artefatos",
+    url: "/admin/tipos-artefatos",
+    icon: Layers,
   },
 ];
 

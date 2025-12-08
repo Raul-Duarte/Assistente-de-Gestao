@@ -77,6 +77,16 @@ export const templates = pgTable("templates", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Artifact types table for dynamic artifact type management
+export const artifactTypes = pgTable("artifact_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slug: varchar("slug", { length: 50 }).notNull().unique(),
+  title: varchar("title", { length: 100 }).notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Artifacts table for storing generated documents
 export const artifacts = pgTable("artifacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -110,6 +120,10 @@ export const profilesRelations = relations(profiles, ({ many }) => ({
 
 export const plansRelations = relations(plans, ({ many }) => ({
   users: many(users),
+}));
+
+export const artifactTypesRelations = relations(artifactTypes, ({ many }) => ({
+  artifacts: many(artifacts),
 }));
 
 export const artifactsRelations = relations(artifacts, ({ one }) => ({
@@ -160,6 +174,11 @@ export const insertTemplateSchema = createInsertSchema(templates).omit({
   createdAt: true,
 });
 
+export const insertArtifactTypeSchema = createInsertSchema(artifactTypes).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Schema for manual user creation by admin
 export const createManualUserSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -186,7 +205,10 @@ export type InsertArtifact = z.infer<typeof insertArtifactSchema>;
 export type Template = typeof templates.$inferSelect;
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 
-// Artifact types enum
+export type ArtifactTypeRecord = typeof artifactTypes.$inferSelect;
+export type InsertArtifactType = z.infer<typeof insertArtifactTypeSchema>;
+
+// Artifact types enum (legacy - will be replaced by database types)
 export const ARTIFACT_TYPES = {
   BUSINESS_RULES: "business_rules",
   ACTION_POINTS: "action_points",

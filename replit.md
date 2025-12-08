@@ -62,6 +62,8 @@ Preferred communication style: Simple, everyday language.
 - `profiles` - Role definitions with permissions array
 - `plans` - Subscription tiers with feature flags and tool access
 - `artifacts` - Generated documents linked to users
+- `templates` - Reusable templates for artifact generation (text or file-based)
+- `artifact_types` - Dynamic artifact type definitions with title, description, and slug
 
 **ORM Pattern**: Drizzle with type-safe queries and Zod schema integration
 - Shared schema definitions between client and server
@@ -75,18 +77,21 @@ Preferred communication style: Simple, everyday language.
 
 ### AI Integration
 
-**Provider**: OpenAI API
+**Provider**: OpenAI API (GPT-4o model)
 
-**Artifact Types**: Four distinct document types with specialized prompts
-- Business Rules - Extract policies and guidelines
-- Action Points - Identify tasks with assignees and deadlines
-- Referrals - Document handoffs and next steps
-- Critical Points - Highlight risks and important decisions
+**Artifact Types**: Dynamically managed via database (artifact_types table)
+- Default seeded types: Business Rules, Action Points, Referrals, Critical Points
+- Admin can create, edit, and delete artifact types via `/admin/tipos-artefatos`
+- Each type has slug, title, description, and active status
+- Legacy prompts maintained for backward compatibility with default types
+- Dynamic prompt generation for custom types based on title/description
 
 **Processing Pattern**:
 - User submits transcript via form
 - Server validates plan permissions and usage limits
-- AI generates structured Markdown document
+- Server fetches artifact type metadata from database
+- AI generates structured Markdown document using type-specific or dynamic prompts
+- Templates can be optionally applied to guide artifact format
 - Result stored in database and returned to client
 - PDF export capability using PDFKit
 

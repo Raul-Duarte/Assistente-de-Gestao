@@ -4,6 +4,7 @@ import {
   plans,
   artifacts,
   templates,
+  artifactTypes,
   type User,
   type UpsertUser,
   type Profile,
@@ -14,6 +15,8 @@ import {
   type InsertArtifact,
   type Template,
   type InsertTemplate,
+  type ArtifactTypeRecord,
+  type InsertArtifactType,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -56,6 +59,13 @@ export interface IStorage {
   getTemplate(id: string): Promise<Template | undefined>;
   createTemplate(data: InsertTemplate): Promise<Template>;
   deleteTemplate(id: string): Promise<void>;
+
+  // Artifact type operations
+  getArtifactTypes(): Promise<ArtifactTypeRecord[]>;
+  getArtifactType(id: string): Promise<ArtifactTypeRecord | undefined>;
+  getArtifactTypeBySlug(slug: string): Promise<ArtifactTypeRecord | undefined>;
+  createArtifactType(data: InsertArtifactType): Promise<ArtifactTypeRecord>;
+  deleteArtifactType(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -270,6 +280,30 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTemplate(id: string): Promise<void> {
     await db.delete(templates).where(eq(templates.id, id));
+  }
+
+  // Artifact type operations
+  async getArtifactTypes(): Promise<ArtifactTypeRecord[]> {
+    return db.select().from(artifactTypes).orderBy(artifactTypes.title);
+  }
+
+  async getArtifactType(id: string): Promise<ArtifactTypeRecord | undefined> {
+    const [type] = await db.select().from(artifactTypes).where(eq(artifactTypes.id, id));
+    return type;
+  }
+
+  async getArtifactTypeBySlug(slug: string): Promise<ArtifactTypeRecord | undefined> {
+    const [type] = await db.select().from(artifactTypes).where(eq(artifactTypes.slug, slug));
+    return type;
+  }
+
+  async createArtifactType(data: InsertArtifactType): Promise<ArtifactTypeRecord> {
+    const [type] = await db.insert(artifactTypes).values(data).returning();
+    return type;
+  }
+
+  async deleteArtifactType(id: string): Promise<void> {
+    await db.delete(artifactTypes).where(eq(artifactTypes.id, id));
   }
 }
 
