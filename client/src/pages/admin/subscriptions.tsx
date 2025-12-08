@@ -92,14 +92,6 @@ export default function AdminSubscriptions() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
-  // Initialize plan filters with all plans selected by default (only once)
-  useEffect(() => {
-    if (plans && plans.length > 0 && !hasInitializedFiltersRef.current) {
-      setSelectedPlanFilters(plans.map(p => p.id));
-      hasInitializedFiltersRef.current = true;
-    }
-  }, [plans]);
-
   const { data: subscriptions, isLoading } = useQuery<SubscriptionWithRelations[]>({
     queryKey: ["/api/admin/subscriptions"],
     enabled: isAuthenticated,
@@ -114,6 +106,14 @@ export default function AdminSubscriptions() {
     queryKey: ["/api/admin/plans"],
     enabled: isAuthenticated,
   });
+
+  // Initialize plan filters with all plans selected by default (only once)
+  useEffect(() => {
+    if (plans && plans.length > 0 && !hasInitializedFiltersRef.current) {
+      setSelectedPlanFilters(plans.map(p => p.id));
+      hasInitializedFiltersRef.current = true;
+    }
+  }, [plans]);
 
   const createMutation = useMutation({
     mutationFn: async (data: SubscriptionForm) => {
