@@ -101,8 +101,8 @@ export default function MeusArtefatosPage() {
     });
   }, [artifacts, typeFilter, startDate, endDate]);
 
-  const handleDownload = async (artifactId: string) => {
-    const response = await fetch(`/api/artifacts/${artifactId}/pdf`, {
+  const handleDownload = async (artifact: Artifact) => {
+    const response = await fetch(`/api/artifacts/${artifact.id}/download`, {
       credentials: "include",
     });
     if (response.ok) {
@@ -110,12 +110,18 @@ export default function MeusArtefatosPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `artefato-${artifactId}.pdf`;
+      const fileType = artifact.fileType || "pdf";
+      a.download = `artefato-${artifact.id}.${fileType}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
+  };
+
+  const getFileTypeLabel = (fileType: string | null | undefined) => {
+    const ft = fileType?.toUpperCase() || "PDF";
+    return ft;
   };
 
   const getTypeBadgeVariant = (type: string) => {
@@ -295,11 +301,11 @@ export default function MeusArtefatosPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleDownload(artifact.id)}
+                              onClick={() => handleDownload(artifact)}
                               data-testid={`button-download-${artifact.id}`}
                             >
                               <Download className="h-4 w-4 mr-1" />
-                              Baixar PDF
+                              Baixar {getFileTypeLabel(artifact.fileType)}
                             </Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>

@@ -7,6 +7,8 @@ import { insertProfileSchema, insertPlanSchema, createManualUserSchema, ARTIFACT
 import { z } from "zod";
 import PDFDocument from "pdfkit";
 import mammoth from "mammoth";
+import * as XLSX from "xlsx";
+import { Document, Paragraph, TextRun, Packer, HeadingLevel, AlignmentType } from "docx";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -287,37 +289,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
           break;
 
         case "xlsx":
-          // For XLSX, we generate a simple XML-based Excel file (SpreadsheetML)
-          const xlsxLines = artifact.content.split("\n").filter(line => line.trim());
-          let xlsxRows = xlsxLines.map((line, idx) => {
+          // Generate real XLSX file using xlsx library
+          const xlsxDataLines = artifact.content.split("\n").filter(line => line.trim());
+          const xlsxData: string[][] = [
+            [artifact.title],
+            [`Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}`],
+            [""]
+          ];
+          
+          xlsxDataLines.forEach(line => {
             const cleanLine = line
               .replace(/^#{1,6}\s+/, "")
               .replace(/\*\*(.+?)\*\*/g, "$1")
               .replace(/\*(.+?)\*/g, "$1")
-              .replace(/^[-*]\s+/, "");
-            return `<Row><Cell><Data ss:Type="String">${cleanLine.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</Data></Cell></Row>`;
-          }).join("");
+              .replace(/^[-*]\s+/, "- ");
+            xlsxData.push([cleanLine]);
+          });
           
-          const xlsxContent = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Worksheet ss:Name="Artefato">
-    <Table>
-      <Row><Cell><Data ss:Type="String">${artifact.title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</Data></Cell></Row>
-      <Row><Cell><Data ss:Type="String">Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}</Data></Cell></Row>
-      <Row><Cell><Data ss:Type="String"></Data></Cell></Row>
-      ${xlsxRows}
-    </Table>
-  </Worksheet>
-</Workbook>`;
-          res.setHeader("Content-Type", "application/vnd.ms-excel");
-          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.xls"`);
-          res.send(xlsxContent);
+          const worksheet = XLSX.utils.aoa_to_sheet(xlsxData);
+          worksheet["!cols"] = [{ wch: 100 }];
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Artefato");
+          const xlsxBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+          
+          res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.xlsx"`);
+          res.send(xlsxBuffer);
           break;
 
         case "docx":
-          // For DOCX, redirect to PDF for now (complex format)
-          // Fall through to PDF generation
+          // Generate real DOCX file using docx library
+          const docxContentLines = artifact.content.split("\n");
+          const docxParagraphs: Paragraph[] = [
+            new Paragraph({
+              text: artifact.title,
+              heading: HeadingLevel.TITLE,
+              alignment: AlignmentType.CENTER
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}`,
+                  italics: true,
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.CENTER
+            }),
+            new Paragraph({ text: "" })
+          ];
+          
+          docxContentLines.forEach(line => {
+            if (line.startsWith("# ")) {
+              docxParagraphs.push(new Paragraph({
+                text: line.substring(2),
+                heading: HeadingLevel.HEADING_1
+              }));
+            } else if (line.startsWith("## ")) {
+              docxParagraphs.push(new Paragraph({
+                text: line.substring(3),
+                heading: HeadingLevel.HEADING_2
+              }));
+            } else if (line.startsWith("### ")) {
+              docxParagraphs.push(new Paragraph({
+                text: line.substring(4),
+                heading: HeadingLevel.HEADING_3
+              }));
+            } else if (line.startsWith("- ") || line.startsWith("* ")) {
+              docxParagraphs.push(new Paragraph({
+                text: line.substring(2),
+                bullet: { level: 0 }
+              }));
+            } else if (line.match(/^\d+\.\s/)) {
+              docxParagraphs.push(new Paragraph({
+                text: line.replace(/^\d+\.\s/, ""),
+                numbering: { reference: "default-numbering", level: 0 }
+              }));
+            } else {
+              const cleanText = line
+                .replace(/\*\*(.+?)\*\*/g, "$1")
+                .replace(/\*(.+?)\*/g, "$1");
+              docxParagraphs.push(new Paragraph({ text: cleanText }));
+            }
+          });
+          
+          const docxDoc = new Document({
+            numbering: {
+              config: [{
+                reference: "default-numbering",
+                levels: [{
+                  level: 0,
+                  format: "decimal",
+                  text: "%1.",
+                  alignment: AlignmentType.LEFT
+                }]
+              }]
+            },
+            sections: [{
+              properties: {},
+              children: docxParagraphs
+            }]
+          });
+          
+          const docxBuffer = await Packer.toBuffer(docxDoc);
+          res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.docx"`);
+          res.send(docxBuffer);
+          break;
         case "pdf":
         default:
           const doc = new PDFDocument({ margin: 50 });

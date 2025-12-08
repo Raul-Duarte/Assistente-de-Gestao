@@ -204,23 +204,23 @@ export default function Artefatos() {
   };
 
   const downloadMutation = useMutation({
-    mutationFn: async (artifactId: string) => {
-      const response = await fetch(`/api/artifacts/${artifactId}/pdf`, {
+    mutationFn: async (artifact: Artifact) => {
+      const response = await fetch(`/api/artifacts/${artifact.id}/download`, {
         credentials: 'include',
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Falha ao baixar PDF");
+        throw new Error(errorData.message || "Falha ao baixar arquivo");
       }
       const blob = await response.blob();
-      return { blob, artifactId };
+      return { blob, artifact };
     },
-    onSuccess: ({ blob, artifactId }) => {
-      const artifact = generatedArtifacts.find((a) => a.id === artifactId);
+    onSuccess: ({ blob, artifact }) => {
+      const fileType = artifact.fileType || "pdf";
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${artifact?.title || "artefato"}.pdf`;
+      a.download = `${artifact.title || "artefato"}.${fileType}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -228,12 +228,16 @@ export default function Artefatos() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Erro ao baixar PDF",
+        title: "Erro ao baixar arquivo",
         description: error.message,
         variant: "destructive",
       });
     },
   });
+
+  const getFileTypeLabel = (fileType: string | null | undefined) => {
+    return (fileType?.toUpperCase() || "PDF");
+  };
 
   const downloadAllMutation = useMutation({
     mutationFn: async (artifactIds: string[]) => {
@@ -682,7 +686,7 @@ export default function Artefatos() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => downloadMutation.mutate(artifact.id)}
+                      onClick={() => downloadMutation.mutate(artifact)}
                       disabled={downloadMutation.isPending}
                       data-testid={`button-download-${artifact.id}`}
                     >
@@ -691,7 +695,7 @@ export default function Artefatos() {
                       ) : (
                         <>
                           <Download className="mr-2 h-4 w-4" />
-                          Baixar PDF
+                          Baixar {getFileTypeLabel(artifact.fileType)}
                         </>
                       )}
                     </Button>
