@@ -89,18 +89,28 @@ export async function generateArtifactContent(
     systemPrompt += `\n\nIMPORTANTE: Utilize o seguinte template/formato como referência para estruturar sua resposta:\n\n${templateContent}`;
   }
 
+  const requestPayload = {
+    model: "gpt-4o" as const,
+    messages: [
+      { role: "system" as const, content: systemPrompt },
+      {
+        role: "user" as const,
+        content: `Analise a seguinte transcrição de reunião e extraia os ${typeName}:\n\n${transcription}`,
+      },
+    ],
+    max_completion_tokens: 4096,
+  };
+
+  console.log(`\n========== OPENAI REQUEST (${typeSlug}) ==========`);
+  console.log(JSON.stringify(requestPayload, null, 2));
+  console.log(`========== END REQUEST ==========\n`);
+
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Analise a seguinte transcrição de reunião e extraia os ${typeName}:\n\n${transcription}`,
-        },
-      ],
-      max_completion_tokens: 4096,
-    });
+    const response = await openai.chat.completions.create(requestPayload);
+
+    console.log(`\n========== OPENAI RESPONSE (${typeSlug}) ==========`);
+    console.log(JSON.stringify(response, null, 2));
+    console.log(`========== END RESPONSE ==========\n`);
 
     return response.choices[0].message.content || `Não foi possível extrair ${typeName} da transcrição fornecida.`;
   } catch (error: any) {
