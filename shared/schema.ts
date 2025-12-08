@@ -208,6 +208,178 @@ export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 export type ArtifactTypeRecord = typeof artifactTypes.$inferSelect;
 export type InsertArtifactType = z.infer<typeof insertArtifactTypeSchema>;
 
+// ==========================================
+// CLIENTS MODULE - Gestão de Clientes
+// ==========================================
+
+// Clients table (separate from system users)
+export const clients = pgTable("clients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 20 }),
+  cpf: varchar("cpf", { length: 14 }).notNull().unique(),
+  address: text("address"),
+  status: varchar("status", { length: 20 }).default("ativo").notNull(), // ativo, inadimplente
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Subscriptions table (Client <-> Plan relationship)
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  planId: varchar("plan_id").references(() => plans.id).notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date"),
+  status: varchar("status", { length: 20 }).default("ativa").notNull(), // ativa, cancelada, suspensa
+  billingDay: integer("billing_day").default(1), // Day of month for billing
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Invoices/Mensalidades table
+export const invoices = pgTable("invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  subscriptionId: varchar("subscription_id").references(() => subscriptions.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  amount: integer("amount").notNull(), // in cents
+  dueDate: timestamp("due_date").notNull(),
+  status: varchar("status", { length: 20 }).default("pendente").notNull(), // pendente, paga, atrasada
+  referenceMonth: varchar("reference_month", { length: 7 }).notNull(), // YYYY-MM format
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Payments table
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").references(() => invoices.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  amount: integer("amount").notNull(), // in cents
+  paymentDate: timestamp("payment_date").defaultNow(),
+  paymentMethod: varchar("payment_method", { length: 50 }), // pix, boleto, cartao, manual
+  transactionId: varchar("transaction_id", { length: 255 }), // Gateway transaction ID
+  status: varchar("status", { length: 20 }).default("aprovado").notNull(), // aprovado, pendente, recusado
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ==========================================
+// RELATIONS FOR NEW TABLES
+// ==========================================
+
+export const clientsRelations = relations(clients, ({ many }) => ({
+  subscriptions: many(subscriptions),
+  invoices: many(invoices),
+  payments: many(payments),
+}));
+
+export const subscriptionsRelations = relations(subscriptions, ({ one, many }) => ({
+  client: one(clients, {
+    fields: [subscriptions.clientId],
+    references: [clients.id],
+  }),
+  plan: one(plans, {
+    fields: [subscriptions.planId],
+    references: [plans.id],
+  }),
+  invoices: many(invoices),
+}));
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  subscription: one(subscriptions, {
+    fields: [invoices.subscriptionId],
+    references: [subscriptions.id],
+  }),
+  client: one(clients, {
+    fields: [invoices.clientId],
+    references: [clients.id],
+  }),
+  payments: many(payments),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  invoice: one(invoices, {
+    fields: [payments.invoiceId],
+    references: [invoices.id],
+  }),
+  client: one(clients, {
+    fields: [payments.clientId],
+    references: [clients.id],
+  }),
+}));
+
+// ==========================================
+// INSERT SCHEMAS FOR NEW TABLES
+// ==========================================
+
+export const insertClientSchema = createInsertSchema(clients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+});
+
+// ==========================================
+// TYPES FOR NEW TABLES
+// ==========================================
+
+export type Client = typeof clients.$inferSelect;
+export type InsertClient = z.infer<typeof insertClientSchema>;
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+
+// ==========================================
+// CLIENT STATUS ENUM
+// ==========================================
+
+export const CLIENT_STATUS = {
+  ATIVO: "ativo",
+  INADIMPLENTE: "inadimplente",
+} as const;
+
+export const SUBSCRIPTION_STATUS = {
+  ATIVA: "ativa",
+  CANCELADA: "cancelada",
+  SUSPENSA: "suspensa",
+} as const;
+
+export const INVOICE_STATUS = {
+  PENDENTE: "pendente",
+  PAGA: "paga",
+  ATRASADA: "atrasada",
+} as const;
+
+export const PAYMENT_STATUS = {
+  APROVADO: "aprovado",
+  PENDENTE: "pendente",
+  RECUSADO: "recusado",
+} as const;
+
 // Artifact types enum (legacy - will be replaced by database types)
 export const ARTIFACT_TYPES = {
   BUSINESS_RULES: "business_rules",
