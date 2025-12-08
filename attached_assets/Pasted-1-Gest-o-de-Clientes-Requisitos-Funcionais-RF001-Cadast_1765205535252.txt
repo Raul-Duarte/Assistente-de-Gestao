@@ -1,0 +1,106 @@
+1. Gestão de Clientes
+Requisitos Funcionais
+RF001 – Cadastrar cliente com dados (nome, e-mail, telefone, CPF, endereço).
+ RF002 – Editar cliente.
+ RF003 – Listar clientes cadastrados com busca e filtros.
+ RF004 – Alterar status do cliente para ativo ou inadimplente automaticamente.
+Regras de Negócio
+RN001 – Nome, e-mail e CPF são obrigatórios no cadastro.
+ RN002 – Todo cliente inicia com status ativo.
+ RN003 – Se houver mensalidade vencida, o status muda para inadimplente.
+ RN004 – Ao quitar todas as mensalidades vencidas, o status volta para ativo.
+
+3. Assinaturas (Cliente ↔ Plano)
+Requisitos Funcionais
+RF020 – Criar assinatura vinculando cliente e plano.
+ RF021 – Renovação automática mensal.
+ RF022 – Cancelar assinatura manualmente.
+RF023 – O administrador pode ativar uma assinatura manualmente
+
+Regras de Negócio
+RN020 – Cliente só pode ter uma assinatura ativa por plano.
+ RN021 – Data de início é obrigatória.
+ RN022 – Cancelar assinatura não remove mensalidades já geradas.
+
+4. Cobranças / Mensalidades
+Requisitos Funcionais
+RF030 – Gerar mensalidade automaticamente no ciclo mensal.
+ RF031 – Listar mensalidades por cliente e assinatura.
+ RF032 – Enviar e-mail com link/QR Code de cobrança.
+Regras de Negócio
+RN030 – Valor da mensalidade herda o valor do plano vigente.
+ RN031 – Vencimento segue a data do ciclo da assinatura.
+ RN032 – Status possíveis: pendente, paga, atrasada.
+ RN033 – Mensalidade vira “atrasada” no dia seguinte ao vencimento.
+RN034 - O ADMINISTRADOR PODE MUDAR O STATUS MANUALMENTE
+
+5. Pagamentos
+Requisitos Funcionais
+RF040 – Registrar pagamento manual.
+ RF041 – Atualizar status automaticamente após retorno do gateway.
+ RF042 – Registrar data, valor e forma de pagamento.
+Regras de Negócio
+RN040 – Valor pago não pode ser menor que o valor da mensalidade.
+ RN041 – Pagamento duplicado deve ser marcado como excedente.
+ RN042 – Ao quitar atrasados, o cliente volta ao status ativo.
+
+6. Relatórios Simples
+Requisitos Funcionais
+RF050 – Relatório de clientes ativos.
+ RF051 – Relatório de inadimplentes.
+ RF052 – Relatório financeiro básico do mês.
+Regras de Negócio
+RN050 – Relatórios devem exibir dados em tempo real.
+ RN051 – Relatório financeiro deve agrupar mensalidades por mês de competência.
+
+7. Gestão de Registro e Perfis (Clientes x Usuários Internos)
+Requisitos Funcionais
+RF070 – Registrar cliente via formulário público.
+ RF071 – Todo cliente registrado deve ir para o módulo Clientes, não para “Usuários”.
+ RF072 – Administradores podem criar usuários internos (admin, financeiro, suporte).
+ RF073 – Aplicar controle de acesso por perfil.
+ RF074 – Login permite somente usuários internos.
+Regras de Negócio
+RN070 – Clientes não acessam o painel administrativo.
+ RN071 – Clientes nunca devem ser inseridos como usuários do sistema.
+ RN072 – Usuários internos não aparecem na lista de clientes.
+ RN073 – Apenas administradores podem criar usuários internos.
+ RN074 – Login exige credenciais de usuário interno válido.
+
+8. Controle de Permissões por Menu/Módulo
+Requisitos Funcionais
+RF080 – Administrador define permissões para cada perfil por menu/módulo.
+ RF081 – Listar perfis e suas opções de permissão: Menu, Listar, Incluir, Editar, Excluir.
+ RF082 – Salvar permissões configuradas.
+ RF083 – Restrição automática de ações conforme permissões.
+ RF084 – Carregar permissões no login.
+ RF085 – Apenas administradores podem editar permissões.
+Regras de Negócio
+RN080 – Permissão “Menu” controla visibilidade do módulo.
+ RN081 – Sem permissão “Listar”, acesso deve ser bloqueado.
+ RN082 – “Incluir” habilita criar novos registros.
+ RN083 – “Editar” habilita a alteração de registros.
+ RN084 – “Excluir” habilita remoção de registros.
+ RN085 – Perfil sem nenhuma permissão não pode acessar o módulo.
+ RN086 – Perfis novos iniciam sem permissões.
+ RN087 – Alterações em permissões devem ser registradas (auditoria futura).
+
+9. Gestão de Perfis
+Requisitos Funcionais
+RF090 – Listar perfis cadastrados.
+ RF091 – Criar novo perfil.
+ RF092 – Editar perfil existente.
+ RF093 – Inativar perfil.
+ RF094 – Exibir permissões associadas ao perfil.
+ RF095 – Associar perfis a usuários internos.
+ RF096 – Apenas administradores podem criar ou editar perfis.
+Regras de Negócio
+RN090 – Nome do perfil é obrigatório e deve ser único.
+ RN091 – Perfis inativos não podem ser atribuídos a usuários.
+ RN092 – Perfis padrão (Administrador, Financeiro, Suporte) não podem ser excluídos.
+ RN093 – Alterações no perfil afetam imediatamente as permissões dos usuários.
+ RN094 – Cada usuário deve ter apenas um perfil.
+ RN095 – Alterações em perfis devem ser registradas para auditoria.
+
+
+AINDA NÃO TENHO NENHUM gateway CONFIGURADO, MAS JÁ DEIXA PRONTO PARA RECEBER ESSA INFORMAÇÃO, COMO AINDA NÃO TENHO ESSA OPÇÃO, TODO PLANO CONTRATADO JÁ DEVE SER APROVADO COMO SE FOSSE PAGO.
