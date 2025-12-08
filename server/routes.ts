@@ -99,7 +99,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (template.type === 'text' && template.content) {
             templateContent = template.content;
           } else if (template.type === 'file' && template.fileData) {
-            templateContent = `[Arquivo de referência: ${template.fileName}]`;
+            // Decode file content for text-based files
+            const textMimeTypes = [
+              'text/plain',
+              'text/markdown',
+              'text/html',
+              'application/json',
+            ];
+            if (template.mimeType && textMimeTypes.includes(template.mimeType)) {
+              try {
+                templateContent = Buffer.from(template.fileData, 'base64').toString('utf-8');
+              } catch {
+                templateContent = `[Arquivo de referência: ${template.fileName}]`;
+              }
+            } else {
+              // For binary files like PDF/Word, provide filename as reference
+              templateContent = `[Template de arquivo: ${template.fileName}]\n\nNota: Use o formato e estrutura típicos de um documento "${template.fileName}" como referência para organizar a saída.`;
+            }
           }
         }
       }

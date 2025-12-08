@@ -184,45 +184,6 @@ export default function AdminArtifactTypes() {
     return null;
   }
 
-  const TypeForm = () => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="title">Título</Label>
-        <Input
-          id="title"
-          value={formData.title || ""}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          placeholder="Ex: Regras de Negócio"
-          data-testid="input-type-title"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="slug">Slug (identificador único)</Label>
-        <Input
-          id="slug"
-          value={formData.slug || ""}
-          onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-          placeholder="Ex: business_rules"
-          data-testid="input-type-slug"
-        />
-        <p className="text-xs text-muted-foreground">
-          Apenas letras minúsculas, números e underscore
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="description">Descrição</Label>
-        <Textarea
-          id="description"
-          value={formData.description || ""}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          placeholder="Descreva o que este tipo de artefato extrai da transcrição"
-          rows={3}
-          data-testid="input-type-description"
-        />
-      </div>
-    </div>
-  );
-
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -247,7 +208,42 @@ export default function AdminArtifactTypes() {
                   Adicione um novo tipo de documento que pode ser gerado pela IA
                 </DialogDescription>
               </DialogHeader>
-              <TypeForm />
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Título</Label>
+                  <Input
+                    id="title"
+                    value={formData.title || ""}
+                    onChange={(e) => handleTitleChange(e.target.value)}
+                    placeholder="Ex: Regras de Negócio"
+                    data-testid="input-type-title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="slug">Slug (identificador único)</Label>
+                  <Input
+                    id="slug"
+                    value={formData.slug || ""}
+                    onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                    placeholder="Ex: business_rules"
+                    data-testid="input-type-slug"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Apenas letras minúsculas, números e underscore
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description || ""}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Descreva o que este tipo de artefato extrai da transcrição"
+                    rows={3}
+                    data-testid="input-type-description"
+                  />
+                </div>
+              </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)} data-testid="button-cancel-create">
                   Cancelar
