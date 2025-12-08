@@ -54,25 +54,6 @@ export default function Dashboard() {
     enabled: isAuthenticated,
   });
 
-  if (authLoading) {
-    return (
-      <AdminLayout>
-        <div className="space-y-6">
-          <Skeleton className="h-10 w-64" />
-          <div className="grid md:grid-cols-3 gap-6">
-            <Skeleton className="h-40" />
-            <Skeleton className="h-40" />
-            <Skeleton className="h-40" />
-          </div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return null;
-  }
-
   const isAdmin = userProfile?.name === "Administrador";
   const recentArtifacts = artifacts?.slice(0, 5) || [];
 
@@ -91,6 +72,25 @@ export default function Dashboard() {
       percentage: Math.round((count / artifacts.length) * 100),
     }));
   }, [artifacts]);
+
+  if (authLoading) {
+    return (
+      <AdminLayout>
+        <div className="space-y-6">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid md:grid-cols-3 gap-6">
+            <Skeleton className="h-40" />
+            <Skeleton className="h-40" />
+            <Skeleton className="h-40" />
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <AdminLayout>
