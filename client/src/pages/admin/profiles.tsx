@@ -33,14 +33,23 @@ import type { Profile, InsertProfile } from "@shared/schema";
 
 const allPermissions = [
   { id: "users.view", label: "Visualizar Usuários" },
+  { id: "users.create", label: "Criar Usuários" },
   { id: "users.edit", label: "Editar Usuários" },
   { id: "users.delete", label: "Excluir Usuários" },
+  { id: "users.activate", label: "Ativar/Inativar Usuários" },
   { id: "profiles.view", label: "Visualizar Perfis" },
+  { id: "profiles.create", label: "Criar Perfis" },
   { id: "profiles.edit", label: "Editar Perfis" },
+  { id: "profiles.delete", label: "Excluir Perfis" },
   { id: "plans.view", label: "Visualizar Planos" },
+  { id: "plans.create", label: "Criar Planos" },
   { id: "plans.edit", label: "Editar Planos" },
+  { id: "artifacts.view", label: "Visualizar Artefatos" },
   { id: "artifacts.generate", label: "Gerar Artefatos" },
   { id: "artifacts.export", label: "Exportar Artefatos" },
+  { id: "artifacts.viewAll", label: "Ver Todos os Artefatos" },
+  { id: "admin.access", label: "Acessar Área Administrativa" },
+  { id: "dashboard.view", label: "Visualizar Dashboard" },
 ];
 
 export default function AdminProfiles() {

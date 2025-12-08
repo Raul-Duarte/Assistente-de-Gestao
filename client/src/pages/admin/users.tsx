@@ -104,7 +104,7 @@ export default function AdminUsers() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async (data: { id: string; profileId?: string; planId?: string; isActive?: boolean }) => {
+    mutationFn: async (data: { id: string; email?: string; profileId?: string; planId?: string; isActive?: boolean }) => {
       return apiRequest("PATCH", `/api/admin/users/${data.id}`, data);
     },
     onSuccess: () => {
@@ -440,7 +440,7 @@ export default function AdminUsers() {
                                 <DialogHeader>
                                   <DialogTitle>Editar Usuário</DialogTitle>
                                   <DialogDescription>
-                                    Atualize o perfil e plano do usuário
+                                    Atualize as informações do usuário
                                   </DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-4 py-4">
@@ -455,18 +455,29 @@ export default function AdminUsers() {
                                       <p className="font-medium">
                                         {editingUser?.firstName} {editingUser?.lastName}
                                       </p>
-                                      <p className="text-sm text-muted-foreground">
-                                        {editingUser?.email}
-                                      </p>
                                     </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label htmlFor="edit-email">Email</Label>
+                                    <Input
+                                      id="edit-email"
+                                      type="email"
+                                      value={editingUser?.email || ""}
+                                      onChange={(e) =>
+                                        setEditingUser((prev) =>
+                                          prev ? { ...prev, email: e.target.value } : null
+                                        )
+                                      }
+                                      data-testid="input-edit-user-email"
+                                    />
                                   </div>
                                   <div className="space-y-2">
                                     <Label>Perfil</Label>
                                     <Select
-                                      defaultValue={editingUser?.profileId || ""}
+                                      value={editingUser?.profileId || "none"}
                                       onValueChange={(value) =>
                                         setEditingUser((prev) =>
-                                          prev ? { ...prev, profileId: value } : null
+                                          prev ? { ...prev, profileId: value === "none" ? null : value } : null
                                         )
                                       }
                                     >
@@ -474,6 +485,7 @@ export default function AdminUsers() {
                                         <SelectValue placeholder="Selecione um perfil" />
                                       </SelectTrigger>
                                       <SelectContent>
+                                        <SelectItem value="none">Nenhum perfil</SelectItem>
                                         {profiles?.map((profile) => (
                                           <SelectItem key={profile.id} value={profile.id} data-testid={`option-profile-${profile.id}`}>
                                             {profile.name}
@@ -485,10 +497,10 @@ export default function AdminUsers() {
                                   <div className="space-y-2">
                                     <Label>Plano</Label>
                                     <Select
-                                      defaultValue={editingUser?.planId || ""}
+                                      value={editingUser?.planId || "none"}
                                       onValueChange={(value) =>
                                         setEditingUser((prev) =>
-                                          prev ? { ...prev, planId: value } : null
+                                          prev ? { ...prev, planId: value === "none" ? null : value } : null
                                         )
                                       }
                                     >
@@ -496,11 +508,31 @@ export default function AdminUsers() {
                                         <SelectValue placeholder="Selecione um plano" />
                                       </SelectTrigger>
                                       <SelectContent>
+                                        <SelectItem value="none">Nenhum plano</SelectItem>
                                         {plans?.map((plan) => (
                                           <SelectItem key={plan.id} value={plan.id} data-testid={`option-plan-${plan.id}`}>
                                             {plan.name}
                                           </SelectItem>
                                         ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Status</Label>
+                                    <Select
+                                      value={editingUser?.isActive ? "active" : "inactive"}
+                                      onValueChange={(value) =>
+                                        setEditingUser((prev) =>
+                                          prev ? { ...prev, isActive: value === "active" } : null
+                                        )
+                                      }
+                                    >
+                                      <SelectTrigger data-testid="select-user-status">
+                                        <SelectValue placeholder="Selecione o status" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="active">Ativo</SelectItem>
+                                        <SelectItem value="inactive">Inativo</SelectItem>
                                       </SelectContent>
                                     </Select>
                                   </div>
@@ -518,8 +550,10 @@ export default function AdminUsers() {
                                       editingUser &&
                                       updateUserMutation.mutate({
                                         id: editingUser.id,
+                                        email: editingUser.email || undefined,
                                         profileId: editingUser.profileId || undefined,
                                         planId: editingUser.planId || undefined,
+                                        isActive: editingUser.isActive,
                                       })
                                     }
                                     disabled={updateUserMutation.isPending}

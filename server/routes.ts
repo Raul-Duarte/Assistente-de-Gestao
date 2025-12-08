@@ -278,8 +278,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Acesso negado" });
       }
 
-      const { profileId, planId, isActive } = req.body;
-      const user = await storage.updateUser(req.params.id, { profileId, planId, isActive });
+      const { email, profileId, planId, isActive } = req.body;
+      const user = await storage.updateUser(req.params.id, { email, profileId, planId, isActive });
       res.json(user);
     } catch (error) {
       console.error("Error updating user:", error);

@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
@@ -36,8 +37,9 @@ import {
   FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Profile } from "@shared/schema";
 
-const adminMenuItems = [
+const mainMenuItems = [
   {
     title: "Dashboard",
     url: "/dashboard",
@@ -47,6 +49,11 @@ const adminMenuItems = [
     title: "Artefatos",
     url: "/artefatos",
     icon: Sparkles,
+  },
+  {
+    title: "Meus Artefatos",
+    url: "/meus-artefatos",
+    icon: FileText,
   },
 ];
 
@@ -79,7 +86,14 @@ interface AdminLayoutProps {
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [location] = useLocation();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+
+  const { data: userProfile } = useQuery<Profile>({
+    queryKey: ["/api/user/profile"],
+    enabled: isAuthenticated,
+  });
+
+  const isAdmin = userProfile?.name === "Administrador";
 
   const getInitials = (firstName?: string | null, lastName?: string | null) => {
     const first = firstName?.charAt(0) || "";
@@ -108,7 +122,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               <SidebarGroupLabel>Principal</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {adminMenuItems.map((item) => (
+                  {mainMenuItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild
@@ -126,27 +140,29 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <SidebarGroup>
-              <SidebarGroupLabel>Administração</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {managementItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={location === item.url}
-                        data-testid={`nav-${item.url.replace(/\//g, "-").slice(1)}`}
-                      >
-                        <a href={item.url}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </a>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {isAdmin && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Administração</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {managementItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location === item.url}
+                          data-testid={`nav-${item.url.replace(/\//g, "-").slice(1)}`}
+                        >
+                          <a href={item.url}>
+                            <item.icon />
+                            <span>{item.title}</span>
+                          </a>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="border-t p-2">
