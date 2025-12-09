@@ -909,7 +909,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Template não encontrado" });
       }
       
-      if (template.userId !== userId) {
+      // Check ownership or admin role
+      const userProfile = await storage.getUserProfile(userId);
+      const isAdmin = userProfile?.name === "Administrador";
+      
+      if (template.userId !== userId && !isAdmin) {
         return res.status(403).json({ message: "Acesso negado" });
       }
       
