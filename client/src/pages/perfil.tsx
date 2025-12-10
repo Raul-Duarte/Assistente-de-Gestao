@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -86,22 +86,24 @@ export default function Perfil() {
     },
   });
 
-  // Load client data into form when available
-  if (client && !form.formState.isDirty && isEditing) {
-    form.reset({
-      name: client.name || "",
-      email: client.email || "",
-      phone: client.phone || "",
-      cpf: client.cpf ? formatCpf(client.cpf) : "",
-      cep: client.cep ? formatCep(client.cep) : "",
-      street: client.street || "",
-      number: client.number || "",
-      complement: client.complement || "",
-      neighborhood: client.neighborhood || "",
-      city: client.city || "",
-      state: client.state || "",
-    });
-  }
+  // Load client data into form when entering edit mode
+  useEffect(() => {
+    if (client && isEditing) {
+      form.reset({
+        name: client.name || "",
+        email: client.email || "",
+        phone: client.phone || "",
+        cpf: client.cpf ? formatCpf(client.cpf) : "",
+        cep: client.cep ? formatCep(client.cep) : "",
+        street: client.street || "",
+        number: client.number || "",
+        complement: client.complement || "",
+        neighborhood: client.neighborhood || "",
+        city: client.city || "",
+        state: client.state || "",
+      });
+    }
+  }, [isEditing, client]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: MyDataForm) => {
