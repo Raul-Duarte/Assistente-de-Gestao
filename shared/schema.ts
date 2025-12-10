@@ -74,6 +74,7 @@ export const templates = pgTable("templates", {
   fileData: text("file_data"), // Base64 encoded file content
   mimeType: varchar("mime_type", { length: 100 }),
   fileSize: integer("file_size"),
+  placeholders: jsonb("placeholders").$type<string[]>().default([]), // Detected placeholders like {{FIELD_NAME}}
   createdAt: timestamp("created_at").defaultNow(),
 });
 

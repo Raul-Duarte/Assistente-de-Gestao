@@ -25,7 +25,9 @@ import {
   Clock,
   Calendar,
   Loader2,
+  Braces,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -462,6 +464,27 @@ export default function Templates() {
                         )}
                         {template.type === 'file' && template.fileSize && (
                           <span>{formatFileSize(template.fileSize)}</span>
+                        )}
+                        {template.placeholders && template.placeholders.length > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="secondary" className="gap-1 cursor-help">
+                                <Braces className="h-3 w-3" />
+                                {template.placeholders.length} placeholder{template.placeholders.length !== 1 ? 's' : ''}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p className="font-medium mb-1">Placeholders detectados:</p>
+                              <ul className="text-xs space-y-0.5">
+                                {template.placeholders.slice(0, 10).map((p: string) => (
+                                  <li key={p} className="font-mono">{`{{${p}}}`}</li>
+                                ))}
+                                {template.placeholders.length > 10 && (
+                                  <li className="text-muted-foreground">...e mais {template.placeholders.length - 10}</li>
+                                )}
+                              </ul>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                     </div>

@@ -9,6 +9,13 @@ import PDFDocument from "pdfkit";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { Document, Paragraph, TextRun, Packer, HeadingLevel, AlignmentType } from "docx";
+import { 
+  extractPlaceholders, 
+  extractPlaceholdersFromFile, 
+  fillTemplate,
+  validatePlaceholderMapping,
+  type PlaceholderData 
+} from "./template-processor";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -879,6 +886,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      let detectedPlaceholders: string[] = [];
+      
+      if (data.type === 'text' && data.content) {
+        detectedPlaceholders = extractPlaceholders(data.content);
+      } else if (data.type === 'file' && data.fileData && data.fileName && data.mimeType) {
+        const fileBuffer = Buffer.from(data.fileData, 'base64');
+        detectedPlaceholders = await extractPlaceholdersFromFile(fileBuffer, data.mimeType, data.fileName);
+      }
+
       const template = await storage.createTemplate({
         userId,
         description: data.description,
@@ -888,6 +904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileData: data.type === 'file' ? data.fileData : null,
         mimeType: data.type === 'file' ? data.mimeType : null,
         fileSize: data.type === 'file' ? data.fileSize : null,
+        placeholders: detectedPlaceholders,
       });
 
       res.json(template);
@@ -922,6 +939,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting template:", error);
       res.status(500).json({ message: "Failed to delete template" });
+    }
+  });
+
+  const fillTemplateSchema = z.object({
+    templateId: z.string().min(1, "Template é obrigatório"),
+    data: z.record(z.string()),
+  });
+
+  app.post("/api/templates/:id/fill", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const template = await storage.getTemplate(req.params.id);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template não encontrado" });
+      }
+      
+      if (template.userId !== userId) {
+        const userProfile = await storage.getUserProfile(userId);
+        if (userProfile?.name !== "Administrador") {
+          return res.status(403).json({ message: "Acesso negado" });
+        }
+      }
+      
+      const { data } = req.body as { data: PlaceholderData };
+      
+      if (!data || typeof data !== 'object') {
+        return res.status(400).json({ message: "Dados de preenchimento são obrigatórios" });
+      }
+      
+      const templatePlaceholders = template.placeholders || [];
+      
+      if (template.type === 'text') {
+        let filledContent = template.content || "";
+        
+        for (const placeholder of templatePlaceholders) {
+          const placeholderPattern = `{{${placeholder}}}`;
+          const value = data[placeholder] || "";
+          filledContent = filledContent.replace(new RegExp(placeholderPattern.replace(/[{}]/g, "\\$&"), "g"), value);
+        }
+        
+        for (const [key, value] of Object.entries(data)) {
+          const placeholder = `{{${key}}}`;
+          filledContent = filledContent.replace(new RegExp(placeholder.replace(/[{}]/g, "\\$&"), "g"), value || "");
+        }
+        
+        return res.json({
+          success: true,
+          type: 'text',
+          content: filledContent,
+        });
+      }
+      
+      if (template.type === 'file' && template.fileData && template.fileName && template.mimeType) {
+        const fileBuffer = Buffer.from(template.fileData, 'base64');
+        const result = await fillTemplate(fileBuffer, template.mimeType, template.fileName, data, templatePlaceholders);
+        
+        if (!result.success) {
+          return res.status(400).json({ message: result.error });
+        }
+        
+        res.setHeader('Content-Type', result.mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+        return res.send(result.data);
+      }
+      
+      return res.status(400).json({ message: "Template inválido para preenchimento" });
+    } catch (error) {
+      console.error("Error filling template:", error);
+      res.status(500).json({ message: "Failed to fill template" });
+    }
+  });
+
+  app.get("/api/templates/:id/placeholders", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const template = await storage.getTemplate(req.params.id);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template não encontrado" });
+      }
+      
+      if (template.userId !== userId) {
+        const userProfile = await storage.getUserProfile(userId);
+        if (userProfile?.name !== "Administrador") {
+          return res.status(403).json({ message: "Acesso negado" });
+        }
+      }
+      
+      let placeholders: string[] = template.placeholders || [];
+      
+      if (placeholders.length === 0) {
+        if (template.type === 'text' && template.content) {
+          placeholders = extractPlaceholders(template.content);
+        } else if (template.type === 'file' && template.fileData && template.fileName && template.mimeType) {
+          const fileBuffer = Buffer.from(template.fileData, 'base64');
+          placeholders = await extractPlaceholdersFromFile(fileBuffer, template.mimeType, template.fileName);
+        }
+      }
+      
+      res.json({ placeholders });
+    } catch (error) {
+      console.error("Error getting template placeholders:", error);
+      res.status(500).json({ message: "Failed to get placeholders" });
     }
   });
 
