@@ -86,8 +86,9 @@ export interface IStorage {
   getClientByCpf(cpf: string): Promise<Client | undefined>;
   getClientByEmail(email: string): Promise<Client | undefined>;
   getClientByUserId(userId: string): Promise<Client | undefined>;
+  getClientByEmailToken(token: string): Promise<Client | undefined>;
   createClient(data: InsertClient): Promise<Client>;
-  updateClient(id: string, data: Partial<InsertClient>): Promise<Client>;
+  updateClient(id: string, data: Partial<Client>): Promise<Client>;
   deleteClient(id: string): Promise<void>;
   updateClientStatus(id: string, status: string): Promise<Client>;
 
@@ -393,6 +394,11 @@ export class DatabaseStorage implements IStorage {
     return client;
   }
 
+  async getClientByEmailToken(token: string): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(eq(clients.emailVerificationToken, token));
+    return client;
+  }
+
   async createClient(data: InsertClient): Promise<Client> {
     const [client] = await db.insert(clients).values({
       ...data,
@@ -401,7 +407,7 @@ export class DatabaseStorage implements IStorage {
     return client;
   }
 
-  async updateClient(id: string, data: Partial<InsertClient>): Promise<Client> {
+  async updateClient(id: string, data: Partial<Client>): Promise<Client> {
     const [client] = await db
       .update(clients)
       .set({ ...data, updatedAt: new Date() })

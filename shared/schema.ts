@@ -241,6 +241,8 @@ export const clients = pgTable("clients", {
   phone: varchar("phone", { length: 20 }),
   // CPF is nullable during initial registration, required after completion
   cpf: varchar("cpf", { length: 14 }),
+  // Profile image
+  profileImageUrl: text("profile_image_url"),
   // Detailed address fields
   cep: varchar("cep", { length: 9 }),
   street: varchar("street", { length: 255 }),
@@ -251,6 +253,10 @@ export const clients = pgTable("clients", {
   state: varchar("state", { length: 2 }),
   // Legacy address field (deprecated, kept for compatibility)
   address: text("address"),
+  // Email change pending verification
+  pendingEmail: varchar("pending_email", { length: 255 }),
+  emailVerificationToken: varchar("email_verification_token", { length: 100 }),
+  emailVerificationExpiry: timestamp("email_verification_expiry"),
   // Registration status
   registrationComplete: boolean("registration_complete").default(false),
   status: varchar("status", { length: 20 }).default("ativo").notNull(), // ativo, inadimplente

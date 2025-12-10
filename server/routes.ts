@@ -24,8 +24,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const email = req.user.claims.email;
+      
+      // First check if this is an operational user (admin-created)
       const user = await storage.getUser(userId);
-      res.json(user);
+      if (user && user.profileId) {
+        // Return operational user data
+        return res.json(user);
+      }
+      
+      // Otherwise, check if this is a client
+      let client = await storage.getClientByUserId(userId);
+      if (!client && email) {
+        client = await storage.getClientByEmail(email);
+      }
+      
+      if (client) {
+        // Parse client name into firstName and lastName for frontend compatibility
+        const nameParts = (client.name || "").trim().split(" ").filter(p => p.length > 0);
+        const firstName = nameParts[0] || "Cliente";
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+        
+        // Return client data in user-compatible format
+        return res.json({
+          id: client.id,
+          email: client.email,
+          firstName: firstName,
+          lastName: lastName,
+          profileImageUrl: client.profileImageUrl || null,
+          isClient: true,
+          registrationComplete: client.registrationComplete,
+          createdAt: client.createdAt,
+        });
+      }
+      
+      // No user or client found
+      res.status(404).json({ message: "User not found" });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -136,6 +170,196 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
       }
       res.status(500).json({ message: "Erro ao completar cadastro" });
+    }
+  });
+
+  // Update client profile
+  const updateProfileSchema = z.object({
+    name: z.string().min(3),
+    email: z.string().email(),
+    phone: z.string().optional(),
+    cpf: z.string().min(11).max(14).transform(val => val.replace(/\D/g, "")),
+    cep: z.string().min(8).max(9).transform(val => val.replace(/\D/g, "")),
+    street: z.string().min(3),
+    number: z.string().min(1),
+    complement: z.string().optional(),
+    neighborhood: z.string().min(2),
+    city: z.string().min(2),
+    state: z.string().length(2),
+    emailChanged: z.boolean().optional(),
+  });
+
+  app.put("/api/client/update-profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentEmail = req.user.claims.email;
+      
+      const data = updateProfileSchema.parse(req.body);
+      
+      let client = await storage.getClientByUserId(userId);
+      if (!client && currentEmail) {
+        client = await storage.getClientByEmail(currentEmail);
+      }
+      
+      if (!client) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      
+      // Check if CPF is already used by another client
+      if (data.cpf) {
+        const existingCpf = await storage.getClientByCpf(data.cpf);
+        if (existingCpf && existingCpf.id !== client.id) {
+          return res.status(400).json({ message: "CPF já cadastrado por outro cliente" });
+        }
+      }
+      
+      // Handle email change - requires verification
+      let emailPending = false;
+      const updateData: any = {
+        name: data.name,
+        phone: data.phone || null,
+        cpf: data.cpf,
+        cep: data.cep,
+        street: data.street,
+        number: data.number,
+        complement: data.complement || null,
+        neighborhood: data.neighborhood,
+        city: data.city,
+        state: data.state,
+      };
+      
+      // If email is being changed, store it as pending
+      if (data.emailChanged && data.email !== client.email) {
+        const crypto = await import("crypto");
+        const token = crypto.randomBytes(32).toString("hex");
+        const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        
+        updateData.pendingEmail = data.email;
+        updateData.emailVerificationToken = token;
+        updateData.emailVerificationExpiry = expiry;
+        emailPending = true;
+        
+        // TODO: Send verification email
+        console.log(`Email verification token for ${data.email}: ${token}`);
+      }
+      
+      const updatedClient = await storage.updateClient(client.id, updateData);
+      
+      res.json({ ...updatedClient, emailPending });
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      res.status(500).json({ message: "Erro ao atualizar perfil" });
+    }
+  });
+
+  // Verify email change
+  app.get("/api/client/verify-email/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      const client = await storage.getClientByEmailToken(token);
+      if (!client) {
+        return res.status(404).json({ message: "Token inválido ou expirado" });
+      }
+      
+      if (client.emailVerificationExpiry && new Date(client.emailVerificationExpiry) < new Date()) {
+        return res.status(400).json({ message: "Token expirado" });
+      }
+      
+      // Update email and clear pending fields
+      await storage.updateClient(client.id, {
+        email: client.pendingEmail!,
+        pendingEmail: null,
+        emailVerificationToken: null,
+        emailVerificationExpiry: null,
+      });
+      
+      res.json({ message: "Email atualizado com sucesso" });
+    } catch (error) {
+      console.error("Error verifying email:", error);
+      res.status(500).json({ message: "Erro ao verificar email" });
+    }
+  });
+
+  // Upload profile image
+  app.post("/api/client/upload-profile-image", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const email = req.user.claims.email;
+      
+      let client = await storage.getClientByUserId(userId);
+      if (!client && email) {
+        client = await storage.getClientByEmail(email);
+      }
+      
+      if (!client) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      
+      // Check content type
+      const contentType = req.headers["content-type"];
+      if (!contentType?.includes("multipart/form-data")) {
+        return res.status(400).json({ message: "Content-Type deve ser multipart/form-data" });
+      }
+      
+      // For now, we'll use a simple approach - store base64 in database
+      // In production, you should use object storage
+      const chunks: Buffer[] = [];
+      
+      req.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+      
+      req.on("end", async () => {
+        try {
+          const buffer = Buffer.concat(chunks);
+          
+          // Parse multipart form data manually (simplified)
+          const boundary = contentType.split("boundary=")[1];
+          const parts = buffer.toString("binary").split(`--${boundary}`);
+          
+          for (const part of parts) {
+            if (part.includes("filename=") && (part.includes("image/jpeg") || part.includes("image/png"))) {
+              // Extract the image data
+              const headerEnd = part.indexOf("\r\n\r\n");
+              if (headerEnd === -1) continue;
+              
+              const imageData = part.slice(headerEnd + 4);
+              const endIndex = imageData.lastIndexOf("\r\n");
+              const cleanData = endIndex > 0 ? imageData.slice(0, endIndex) : imageData;
+              
+              // Convert to base64 data URL
+              const isJpeg = part.includes("image/jpeg");
+              const mimeType = isJpeg ? "image/jpeg" : "image/png";
+              const base64 = Buffer.from(cleanData, "binary").toString("base64");
+              const dataUrl = `data:${mimeType};base64,${base64}`;
+              
+              // Check size (10MB limit for base64)
+              if (base64.length > 10 * 1024 * 1024 * 1.37) {
+                return res.status(400).json({ message: "Arquivo muito grande. Máximo 10MB." });
+              }
+              
+              // Update client profile image
+              await storage.updateClient(client!.id, {
+                profileImageUrl: dataUrl,
+              });
+              
+              return res.json({ message: "Imagem atualizada com sucesso" });
+            }
+          }
+          
+          res.status(400).json({ message: "Nenhuma imagem válida encontrada" });
+        } catch (parseError) {
+          console.error("Error parsing upload:", parseError);
+          res.status(500).json({ message: "Erro ao processar imagem" });
+        }
+      });
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      res.status(500).json({ message: "Erro ao fazer upload da imagem" });
     }
   });
 

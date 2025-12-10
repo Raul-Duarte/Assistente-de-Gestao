@@ -105,29 +105,44 @@ export default function CompletarCadastro() {
     if (cleanCep.length !== 8) return;
 
     setIsLoadingCep(true);
+    // Clear address fields while loading
+    form.setValue("street", "");
+    form.setValue("neighborhood", "");
+    form.setValue("city", "");
+    form.setValue("state", "");
+    
     try {
       const response = await fetch(`/api/cep/${cleanCep}`);
       if (response.ok) {
         const data = await response.json();
-        if (!data.erro) {
-          form.setValue("street", data.logradouro || "");
-          form.setValue("neighborhood", data.bairro || "");
-          form.setValue("city", data.localidade || "");
-          form.setValue("state", data.uf || "");
-          toast({
-            title: "Endereço encontrado!",
-            description: "Os campos foram preenchidos automaticamente.",
-          });
-        } else {
-          toast({
-            title: "CEP não encontrado",
-            description: "Verifique o CEP digitado.",
-            variant: "destructive",
-          });
-        }
+        form.setValue("street", data.logradouro || "");
+        form.setValue("neighborhood", data.bairro || "");
+        form.setValue("city", data.localidade || "");
+        form.setValue("state", data.uf || "");
+        toast({
+          title: "Endereço encontrado!",
+          description: "Os campos foram preenchidos automaticamente. Você pode editá-los se necessário.",
+        });
+      } else if (response.status === 404) {
+        toast({
+          title: "CEP não encontrado",
+          description: "Não foi possível localizar o endereço. Preencha os campos manualmente.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro ao consultar CEP",
+          description: "Ocorreu um erro. Preencha os campos manualmente.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Error fetching CEP:", error);
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível consultar o CEP. Preencha os campos manualmente.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoadingCep(false);
     }
@@ -257,7 +272,8 @@ export default function CompletarCadastro() {
                         <FormControl>
                           <Input 
                             {...field} 
-                            placeholder="Nome da rua"
+                            placeholder={isLoadingCep ? "Buscando..." : "Nome da rua"}
+                            disabled={isLoadingCep}
                             data-testid="input-street"
                           />
                         </FormControl>
@@ -311,7 +327,8 @@ export default function CompletarCadastro() {
                         <FormControl>
                           <Input 
                             {...field} 
-                            placeholder="Nome do bairro"
+                            placeholder={isLoadingCep ? "Buscando..." : "Nome do bairro"}
+                            disabled={isLoadingCep}
                             data-testid="input-neighborhood"
                           />
                         </FormControl>
@@ -329,7 +346,8 @@ export default function CompletarCadastro() {
                         <FormControl>
                           <Input 
                             {...field} 
-                            placeholder="Nome da cidade"
+                            placeholder={isLoadingCep ? "Buscando..." : "Nome da cidade"}
+                            disabled={isLoadingCep}
                             data-testid="input-city"
                           />
                         </FormControl>
@@ -347,7 +365,8 @@ export default function CompletarCadastro() {
                         <FormControl>
                           <Input 
                             {...field} 
-                            placeholder="UF"
+                            placeholder={isLoadingCep ? "..." : "UF"}
+                            disabled={isLoadingCep}
                             maxLength={2}
                             onChange={(e) => {
                               field.onChange(e.target.value.toUpperCase());
