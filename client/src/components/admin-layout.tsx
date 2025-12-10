@@ -29,7 +29,6 @@ import {
   Users,
   Shield,
   Crown,
-  Sparkles,
   LogOut,
   Home,
   ChevronUp,
@@ -42,9 +41,11 @@ import {
   Receipt,
   Wallet,
   BarChart3,
+  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Profile } from "@shared/schema";
+import logoImage from "@assets/image_1765327489003.png";
 
 const mainMenuItems = [
   {
@@ -55,7 +56,7 @@ const mainMenuItems = [
   {
     title: "Artefatos",
     url: "/artefatos",
-    icon: Sparkles,
+    icon: Wand2,
   },
   {
     title: "Meus Artefatos",
@@ -157,7 +158,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         <Sidebar>
           <SidebarHeader className="border-b p-4">
             <a href="/" className="flex items-center gap-2" data-testid="link-sidebar-logo">
-              <Sparkles className="h-6 w-6 text-primary" />
+              <img src={logoImage} alt="ArtefatosPro" className="h-8 w-8 object-contain" />
               <span className="font-semibold text-lg">ArtefatosPro</span>
             </a>
           </SidebarHeader>
