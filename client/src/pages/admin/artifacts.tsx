@@ -76,7 +76,20 @@ export default function AdminArtifactsPage() {
       const a = document.createElement("a");
       a.href = url;
       const fileType = artifact.fileType || "pdf";
-      a.download = `artefato-${artifact.id}.${fileType}`;
+      const safeTitle = artifact.title.replace(/[^a-zA-Z0-9\s\-_áéíóúàèìòùâêîôûãõçÁÉÍÓÚÀÈÌÒÙÂÊÎÔÛÃÕÇ]/g, "").trim().replace(/\s+/g, "-");
+      const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+      const dateStr = artifact.createdAt 
+        ? dateFormatter.format(new Date(artifact.createdAt)).replace(/[/:]/g, "-").replace(/\s/g, "-")
+        : "";
+      const fileName = dateStr ? `${safeTitle}-${dateStr}.${fileType}` : `${safeTitle}.${fileType}`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

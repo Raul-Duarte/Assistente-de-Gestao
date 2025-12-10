@@ -17,6 +17,92 @@ import {
   type PlaceholderData 
 } from "./template-processor";
 
+// Parse markdown content into structured data for CSV/XLSX export
+function parseMarkdownToStructuredData(
+  content: string, 
+  title: string, 
+  createdAt: Date | null
+): { headers: string[]; rows: string[][] } {
+  const lines = content.split("\n");
+  const rows: string[][] = [];
+  let currentSection = title;
+  let itemNumber = 1;
+
+  // Headers for the spreadsheet
+  const headers = ["N.", "Categoria", "Conteudo"];
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    
+    // Skip empty lines
+    if (!trimmedLine) continue;
+
+    // Check if it's a header (section title)
+    const headerMatch = trimmedLine.match(/^#{1,6}\s+(.+)$/);
+    if (headerMatch) {
+      currentSection = headerMatch[1]
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .replace(/\*(.+?)\*/g, "$1");
+      continue;
+    }
+
+    // Check if it's a list item
+    const listMatch = trimmedLine.match(/^[-*]\s+(.+)$/);
+    if (listMatch) {
+      const itemContent = listMatch[1]
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .replace(/\*(.+?)\*/g, "$1")
+        .replace(/`(.+?)`/g, "$1");
+      
+      rows.push([String(itemNumber), currentSection, itemContent]);
+      itemNumber++;
+      continue;
+    }
+
+    // Check if it's a numbered list item
+    const numberedMatch = trimmedLine.match(/^\d+[.)]\s+(.+)$/);
+    if (numberedMatch) {
+      const itemContent = numberedMatch[1]
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .replace(/\*(.+?)\*/g, "$1")
+        .replace(/`(.+?)`/g, "$1");
+      
+      rows.push([String(itemNumber), currentSection, itemContent]);
+      itemNumber++;
+      continue;
+    }
+
+    // Regular text (not a header or list item)
+    const cleanContent = trimmedLine
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/\*(.+?)\*/g, "$1")
+      .replace(/`(.+?)`/g, "$1");
+    
+    // Skip horizontal rules and metadata lines
+    if (cleanContent.match(/^[-_=]{3,}$/) || cleanContent.startsWith("Gerado em:")) {
+      continue;
+    }
+
+    rows.push([String(itemNumber), currentSection, cleanContent]);
+    itemNumber++;
+  }
+
+  // Add metadata row at the end
+  if (createdAt) {
+    const dateStr = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(new Date(createdAt));
+    rows.push(["", "Metadata", `Gerado em: ${dateStr}`]);
+  }
+
+  return { headers, rows };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
@@ -266,12 +352,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const fileType = artifact.fileType || "pdf";
-      const safeTitle = artifact.title.replace(/[^a-zA-Z0-9\s\-_]/g, "").trim();
+      const safeTitle = artifact.title.replace(/[^a-zA-Z0-9\s\-_]/g, "").trim().replace(/\s+/g, "-");
+      
+      // Generate timestamp for filename in Brasília timezone
+      const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+      const dateStr = artifact.createdAt 
+        ? dateFormatter.format(new Date(artifact.createdAt)).replace(/[/:]/g, "-").replace(/\s/g, "-")
+        : "";
+      const fileNameWithDate = dateStr ? `${safeTitle}-${dateStr}` : safeTitle;
 
       switch (fileType) {
         case "md":
           res.setHeader("Content-Type", "text/markdown; charset=utf-8");
-          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.md"`);
+          res.setHeader("Content-Disposition", `attachment; filename="${fileNameWithDate}.md"`);
           res.send(`# ${artifact.title}\n\n_Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}_\n\n---\n\n${artifact.content}`);
           break;
 
@@ -283,51 +383,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .replace(/`(.+?)`/g, "$1")
             .replace(/^[-*]\s+/gm, "- ");
           res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.txt"`);
+          res.setHeader("Content-Disposition", `attachment; filename="${fileNameWithDate}.txt"`);
           res.send(`${artifact.title}\nGerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}\n\n${txtContent}`);
           break;
 
         case "csv":
-          const lines = artifact.content.split("\n").filter(line => line.trim());
-          const csvLines = lines.map(line => {
-            const cleanLine = line
-              .replace(/^#{1,6}\s+/, "")
-              .replace(/\*\*(.+?)\*\*/g, "$1")
-              .replace(/\*(.+?)\*/g, "$1")
-              .replace(/^[-*]\s+/, "");
-            return `"${cleanLine.replace(/"/g, '""')}"`;
-          });
+          // Parse markdown content into structured data with columns
+          const csvStructuredData = parseMarkdownToStructuredData(artifact.content, artifact.title, artifact.createdAt);
+          const csvHeader = csvStructuredData.headers.map(h => `"${h.replace(/"/g, '""')}"`).join(",");
+          const csvRows = csvStructuredData.rows.map(row => 
+            row.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(",")
+          );
+          const csvOutput = [csvHeader, ...csvRows].join("\n");
+          
           res.setHeader("Content-Type", "text/csv; charset=utf-8");
-          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.csv"`);
-          res.send(`"Titulo","${artifact.title}"\n"Data","${new Date(artifact.createdAt!).toLocaleString("pt-BR")}"\n"Conteudo"\n${csvLines.join("\n")}`);
+          res.setHeader("Content-Disposition", `attachment; filename="${fileNameWithDate}.csv"`);
+          res.send("\uFEFF" + csvOutput); // BOM for Excel UTF-8 compatibility
           break;
 
         case "xlsx":
-          // Generate real XLSX file using xlsx library
-          const xlsxDataLines = artifact.content.split("\n").filter(line => line.trim());
-          const xlsxData: string[][] = [
-            [artifact.title],
-            [`Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR")}`],
-            [""]
+          // Parse markdown content into structured data with columns
+          const xlsxStructuredData = parseMarkdownToStructuredData(artifact.content, artifact.title, artifact.createdAt);
+          const xlsxSheetData: string[][] = [
+            xlsxStructuredData.headers,
+            ...xlsxStructuredData.rows
           ];
           
-          xlsxDataLines.forEach(line => {
-            const cleanLine = line
-              .replace(/^#{1,6}\s+/, "")
-              .replace(/\*\*(.+?)\*\*/g, "$1")
-              .replace(/\*(.+?)\*/g, "$1")
-              .replace(/^[-*]\s+/, "- ");
-            xlsxData.push([cleanLine]);
-          });
-          
-          const worksheet = XLSX.utils.aoa_to_sheet(xlsxData);
-          worksheet["!cols"] = [{ wch: 100 }];
+          const worksheet = XLSX.utils.aoa_to_sheet(xlsxSheetData);
+          // Set column widths based on content
+          worksheet["!cols"] = xlsxStructuredData.headers.map((_, i) => ({ 
+            wch: i === 0 ? 8 : i === 1 ? 30 : 80 
+          }));
           const workbook = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(workbook, worksheet, "Artefato");
           const xlsxBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
           
           res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.xlsx"`);
+          res.setHeader("Content-Disposition", `attachment; filename="${fileNameWithDate}.xlsx"`);
           res.send(xlsxBuffer);
           break;
 
@@ -407,7 +499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const docxBuffer = await Packer.toBuffer(docxDoc);
           res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-          res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.docx"`);
+          res.setHeader("Content-Disposition", `attachment; filename="${fileNameWithDate}.docx"`);
           res.send(docxBuffer);
           break;
         case "pdf":
@@ -419,7 +511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           doc.on("end", () => {
             const pdfBuffer = Buffer.concat(chunks);
             res.setHeader("Content-Type", "application/pdf");
-            res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.pdf"`);
+            res.setHeader("Content-Disposition", `attachment; filename="${fileNameWithDate}.pdf"`);
             res.send(pdfBuffer);
           });
 
@@ -1068,6 +1160,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     slug: z.string().min(1, "Slug é obrigatório").regex(/^[a-z0-9_]+$/, "Slug deve conter apenas letras minúsculas, números e underscore"),
     title: z.string().min(1, "Título é obrigatório"),
     description: z.string().optional(),
+    fileType: z.string().optional().default("pdf"),
+    actionEnabled: z.boolean().optional().default(false),
+    action: z.string().optional(),
     isActive: z.boolean().optional().default(true),
   });
 
@@ -1108,12 +1203,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Acesso negado" });
       }
 
-      const { title, slug, description, fileType, isActive } = req.body;
+      const { title, slug, description, fileType, actionEnabled, action, isActive } = req.body;
       const type = await storage.updateArtifactType(req.params.id, { 
         title, 
         slug, 
         description, 
         fileType,
+        actionEnabled,
+        action,
         isActive 
       });
       res.json(type);
