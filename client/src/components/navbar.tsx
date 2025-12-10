@@ -4,7 +4,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
-import logoImage from "@assets/image_1765327489003.png";
+import logoImage from "@assets/image_1765328129643.png";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,

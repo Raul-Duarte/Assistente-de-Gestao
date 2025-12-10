@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Profile } from "@shared/schema";
-import logoImage from "@assets/image_1765327489003.png";
+import logoImage from "@assets/image_1765328129643.png";
 
 const mainMenuItems = [
   {
