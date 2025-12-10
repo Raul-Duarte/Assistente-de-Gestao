@@ -17,92 +17,6 @@ import {
   type PlaceholderData 
 } from "./template-processor";
 
-// Parse markdown content into structured data for CSV/XLSX export
-function parseMarkdownToStructuredData(
-  content: string, 
-  title: string, 
-  createdAt: Date | null
-): { headers: string[]; rows: string[][] } {
-  const lines = content.split("\n");
-  const rows: string[][] = [];
-  let currentSection = title;
-  let itemNumber = 1;
-
-  // Headers for the spreadsheet
-  const headers = ["N.", "Categoria", "Conteudo"];
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    
-    // Skip empty lines
-    if (!trimmedLine) continue;
-
-    // Check if it's a header (section title)
-    const headerMatch = trimmedLine.match(/^#{1,6}\s+(.+)$/);
-    if (headerMatch) {
-      currentSection = headerMatch[1]
-        .replace(/\*\*(.+?)\*\*/g, "$1")
-        .replace(/\*(.+?)\*/g, "$1");
-      continue;
-    }
-
-    // Check if it's a list item
-    const listMatch = trimmedLine.match(/^[-*]\s+(.+)$/);
-    if (listMatch) {
-      const itemContent = listMatch[1]
-        .replace(/\*\*(.+?)\*\*/g, "$1")
-        .replace(/\*(.+?)\*/g, "$1")
-        .replace(/`(.+?)`/g, "$1");
-      
-      rows.push([String(itemNumber), currentSection, itemContent]);
-      itemNumber++;
-      continue;
-    }
-
-    // Check if it's a numbered list item
-    const numberedMatch = trimmedLine.match(/^\d+[.)]\s+(.+)$/);
-    if (numberedMatch) {
-      const itemContent = numberedMatch[1]
-        .replace(/\*\*(.+?)\*\*/g, "$1")
-        .replace(/\*(.+?)\*/g, "$1")
-        .replace(/`(.+?)`/g, "$1");
-      
-      rows.push([String(itemNumber), currentSection, itemContent]);
-      itemNumber++;
-      continue;
-    }
-
-    // Regular text (not a header or list item)
-    const cleanContent = trimmedLine
-      .replace(/\*\*(.+?)\*\*/g, "$1")
-      .replace(/\*(.+?)\*/g, "$1")
-      .replace(/`(.+?)`/g, "$1");
-    
-    // Skip horizontal rules and metadata lines
-    if (cleanContent.match(/^[-_=]{3,}$/) || cleanContent.startsWith("Gerado em:")) {
-      continue;
-    }
-
-    rows.push([String(itemNumber), currentSection, cleanContent]);
-    itemNumber++;
-  }
-
-  // Add metadata row at the end
-  if (createdAt) {
-    const dateStr = new Intl.DateTimeFormat("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    }).format(new Date(createdAt));
-    rows.push(["", "Metadata", `Gerado em: ${dateStr}`]);
-  }
-
-  return { headers, rows };
-}
-
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
@@ -244,7 +158,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const fileType = artifactType?.fileType || "pdf";
         
         // Use action from artifact type if enabled, otherwise use action from request
-        const typeAction = (artifactType?.actionEnabled && artifactType?.action) ? artifactType.action : action;
+        // Check explicitly for true and non-empty action string
+        const hasTypeAction = artifactType?.actionEnabled === true && 
+                              artifactType?.action && 
+                              artifactType.action.trim().length > 0;
+        const typeAction = hasTypeAction ? artifactType!.action.trim() : (action || undefined);
+        
+        console.log(`[Artifact Generation] Type: ${typeSlug}, actionEnabled: ${artifactType?.actionEnabled}, hasAction: ${!!artifactType?.action}, typeAction: ${typeAction ? 'SET' : 'NOT SET'}`);
         
         const content = await generateArtifactContent(typeSlug, typeName, transcription, typeDescription, templateContent, typeAction);
         const now = new Date();
@@ -388,32 +308,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           break;
 
         case "csv":
-          // Parse markdown content into structured data with columns
-          const csvStructuredData = parseMarkdownToStructuredData(artifact.content, artifact.title, artifact.createdAt);
-          const csvHeader = csvStructuredData.headers.map(h => `"${h.replace(/"/g, '""')}"`).join(",");
-          const csvRows = csvStructuredData.rows.map(row => 
-            row.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(",")
-          );
-          const csvOutput = [csvHeader, ...csvRows].join("\n");
+          // Export content as plain text (same rules as TXT/MD)
+          const csvPlainContent = artifact.content
+            .replace(/^#{1,6}\s+(.+)$/gm, "$1")
+            .replace(/\*\*(.+?)\*\*/g, "$1")
+            .replace(/\*(.+?)\*/g, "$1")
+            .replace(/`(.+?)`/g, "$1")
+            .replace(/^[-*]\s+/gm, "- ");
+          const csvText = `${artifact.title}\nGerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}\n\n${csvPlainContent}`;
           
           res.setHeader("Content-Type", "text/csv; charset=utf-8");
           res.setHeader("Content-Disposition", `attachment; filename="${fileNameWithDate}.csv"`);
-          res.send("\uFEFF" + csvOutput); // BOM for Excel UTF-8 compatibility
+          res.send("\uFEFF" + csvText); // BOM for Excel UTF-8 compatibility
           break;
 
         case "xlsx":
-          // Parse markdown content into structured data with columns
-          const xlsxStructuredData = parseMarkdownToStructuredData(artifact.content, artifact.title, artifact.createdAt);
-          const xlsxSheetData: string[][] = [
-            xlsxStructuredData.headers,
-            ...xlsxStructuredData.rows
+          // Export content as plain text in a single cell per line (same rules as TXT/MD)
+          const xlsxPlainContent = artifact.content
+            .replace(/^#{1,6}\s+(.+)$/gm, "$1")
+            .replace(/\*\*(.+?)\*\*/g, "$1")
+            .replace(/\*(.+?)\*/g, "$1")
+            .replace(/`(.+?)`/g, "$1")
+            .replace(/^[-*]\s+/gm, "- ");
+          const xlsxLines = [
+            [artifact.title],
+            [`Gerado em: ${new Date(artifact.createdAt!).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`],
+            [""],
+            ...xlsxPlainContent.split("\n").map(line => [line])
           ];
           
-          const worksheet = XLSX.utils.aoa_to_sheet(xlsxSheetData);
-          // Set column widths based on content
-          worksheet["!cols"] = xlsxStructuredData.headers.map((_, i) => ({ 
-            wch: i === 0 ? 8 : i === 1 ? 30 : 80 
-          }));
+          const worksheet = XLSX.utils.aoa_to_sheet(xlsxLines);
+          worksheet["!cols"] = [{ wch: 100 }]; // Single wide column
           const workbook = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(workbook, worksheet, "Artefato");
           const xlsxBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
