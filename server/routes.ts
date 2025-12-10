@@ -157,14 +157,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const typeDescription = artifactType?.description;
         const fileType = artifactType?.fileType || "pdf";
         
+        // Debug: Log full artifact type to see actual values
+        console.log(`[DEBUG] ArtifactType for ${typeSlug}:`, JSON.stringify(artifactType, null, 2));
+        
         // Use action from artifact type if enabled, otherwise use action from request
-        // Check explicitly for true and non-empty action string
-        const hasTypeAction = artifactType?.actionEnabled === true && 
+        // Check for truthy value (handles true, "t", 1, etc.)
+        const hasTypeAction = !!artifactType?.actionEnabled && 
                               artifactType?.action && 
                               artifactType.action.trim().length > 0;
         const typeAction = hasTypeAction ? artifactType!.action.trim() : (action || undefined);
         
-        console.log(`[Artifact Generation] Type: ${typeSlug}, actionEnabled: ${artifactType?.actionEnabled}, hasAction: ${!!artifactType?.action}, typeAction: ${typeAction ? 'SET' : 'NOT SET'}`);
+        console.log(`[Artifact Generation] Type: ${typeSlug}, actionEnabled: ${artifactType?.actionEnabled} (type: ${typeof artifactType?.actionEnabled}), hasAction: ${!!artifactType?.action}, typeAction: ${typeAction ? 'SET: ' + typeAction.substring(0, 50) + '...' : 'NOT SET'}`);
         
         const content = await generateArtifactContent(typeSlug, typeName, transcription, typeDescription, templateContent, typeAction);
         const now = new Date();
