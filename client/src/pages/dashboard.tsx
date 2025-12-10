@@ -16,11 +16,14 @@ import {
   Crown,
   Sparkles,
 } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import type { Artifact, Plan, Profile } from "@shared/schema";
-import { ARTIFACT_TYPE_LABELS, type ArtifactType } from "@shared/schema";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import type { Artifact, Plan, Profile, ArtifactTypeRecord } from "@shared/schema";
 
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+const CHART_COLORS = [
+  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", 
+  "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
+  "#14b8a6", "#a855f7", "#eab308", "#22c55e", "#0ea5e9"
+];
 
 export default function Dashboard() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -54,8 +57,21 @@ export default function Dashboard() {
     enabled: isAuthenticated,
   });
 
+  const { data: artifactTypes = [] } = useQuery<ArtifactTypeRecord[]>({
+    queryKey: ["/api/artifact-types"],
+    enabled: isAuthenticated,
+  });
+
   const isAdmin = userProfile?.name === "Administrador";
   const recentArtifacts = artifacts?.slice(0, 5) || [];
+
+  const typeNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    artifactTypes.forEach(t => {
+      map[t.slug] = t.title;
+    });
+    return map;
+  }, [artifactTypes]);
 
   const chartData = useMemo(() => {
     if (!artifacts || artifacts.length === 0) return [];
@@ -66,12 +82,13 @@ export default function Dashboard() {
       typeCounts[type] = (typeCounts[type] || 0) + 1;
     });
 
-    return Object.entries(typeCounts).map(([type, count]) => ({
-      name: ARTIFACT_TYPE_LABELS[type as ArtifactType] || type,
+    return Object.entries(typeCounts).map(([type, count], index) => ({
+      name: typeNameMap[type] || type,
       value: count,
       percentage: Math.round((count / artifacts.length) * 100),
+      color: CHART_COLORS[index % CHART_COLORS.length],
     }));
-  }, [artifacts]);
+  }, [artifacts, typeNameMap]);
 
   if (authLoading) {
     return (
@@ -191,8 +208,8 @@ export default function Dashboard() {
                         label={({ percentage }) => `${percentage}%`}
                         labelLine={false}
                       >
-                        {chartData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        {chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
                       <Tooltip 
@@ -204,14 +221,14 @@ export default function Dashboard() {
                 <div className="flex flex-col gap-3 w-full md:w-1/2">
                   {chartData.map((item, index) => (
                     <div 
-                      key={item.name} 
+                      key={`${item.name}-${index}`} 
                       className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                       data-testid={`chart-legend-${index}`}
                     >
                       <div className="flex items-center gap-3">
                         <div 
                           className="h-3 w-3 rounded-full" 
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          style={{ backgroundColor: item.color }}
                         />
                         <span className="text-sm font-medium">{item.name}</span>
                       </div>

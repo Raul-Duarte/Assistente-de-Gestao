@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   Dialog,
@@ -76,6 +78,8 @@ export default function Artefatos() {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [actionEnabled, setActionEnabled] = useState(false);
+  const [actionText, setActionText] = useState("");
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const { data: artifactTypes = [], isLoading: typesLoading } = useQuery<ArtifactTypeRecord[]>({
@@ -140,8 +144,14 @@ export default function Artefatos() {
     }
   }, [currentPage, totalPages]);
 
+  useEffect(() => {
+    if (selectedTypes.length > 1 && selectedTemplateId) {
+      setSelectedTemplateId(null);
+    }
+  }, [selectedTypes.length, selectedTemplateId]);
+
   const generateMutation = useMutation({
-    mutationFn: async (data: { types: string[]; transcription: string; templateId?: string }) => {
+    mutationFn: async (data: { types: string[]; transcription: string; templateId?: string; action?: string }) => {
       const controller = new AbortController();
       abortControllerRef.current = controller;
       try {
@@ -309,6 +319,7 @@ export default function Artefatos() {
       types: selectedTypes, 
       transcription,
       templateId: selectedTemplateId || undefined,
+      action: actionEnabled ? actionText : undefined,
     });
   };
 
@@ -498,10 +509,45 @@ export default function Artefatos() {
           </CardContent>
         </Card>
 
-        {templates.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle>3. Ação (Opcional)</CardTitle>
+                <CardDescription>
+                  Adicione uma instrução específica para direcionar a geração do artefato
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="action-switch"
+                  checked={actionEnabled}
+                  onCheckedChange={setActionEnabled}
+                  data-testid="switch-action"
+                />
+                <Label htmlFor="action-switch" className="text-sm">
+                  {actionEnabled ? "Ativado" : "Desativado"}
+                </Label>
+              </div>
+            </div>
+          </CardHeader>
+          {actionEnabled && (
+            <CardContent>
+              <Textarea
+                placeholder="Para um melhor direcionamento inclua uma ação para melhorar a construção do artefato."
+                value={actionText}
+                onChange={(e) => setActionText(e.target.value)}
+                className="min-h-[100px]"
+                data-testid="textarea-action"
+              />
+            </CardContent>
+          )}
+        </Card>
+
+        {templates.length > 0 && selectedTypes.length <= 1 && (
           <Card>
             <CardHeader>
-              <CardTitle>3. Template (Opcional)</CardTitle>
+              <CardTitle>4. Template (Opcional)</CardTitle>
               <CardDescription>
                 Selecione um template para formatar o artefato gerado
               </CardDescription>
@@ -586,7 +632,7 @@ export default function Artefatos() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{templates.length > 0 ? "4" : "3"}. Gerar Artefatos</CardTitle>
+            <CardTitle>{templates.length > 0 && selectedTypes.length <= 1 ? "5" : "4"}. Gerar Artefatos</CardTitle>
             <CardDescription>
               Clique no botão abaixo para processar a transcrição
             </CardDescription>

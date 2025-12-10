@@ -71,12 +71,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     types: z.array(z.string()).min(1, "Selecione pelo menos um tipo"),
     transcription: z.string().min(10, "Transcrição muito curta"),
     templateId: z.string().optional(),
+    action: z.string().optional(),
   });
 
   app.post("/api/artifacts/generate", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { types, transcription, templateId } = generateArtifactsSchema.parse(req.body);
+      const { types, transcription, templateId, action } = generateArtifactsSchema.parse(req.body);
 
       // Check user plan access
       const plan = await storage.getUserPlan(userId);
@@ -156,8 +157,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const typeDescription = artifactType?.description;
         const fileType = artifactType?.fileType || "pdf";
         
-        const content = await generateArtifactContent(typeSlug, typeName, transcription, typeDescription, templateContent);
-        const title = `${typeName} - ${new Date().toLocaleDateString("pt-BR")}`;
+        const content = await generateArtifactContent(typeSlug, typeName, transcription, typeDescription, templateContent, action);
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+        const timeStr = now.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+        const title = `${typeName} - ${dateStr} - ${timeStr}`;
 
         const artifact = await storage.createArtifact({
           userId,

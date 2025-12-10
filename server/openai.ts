@@ -79,7 +79,8 @@ export async function generateArtifactContent(
   typeName: string,
   transcription: string,
   typeDescription?: string | null,
-  templateContent?: string
+  templateContent?: string,
+  action?: string
 ): Promise<string> {
   // Use legacy prompt if available, otherwise generate default
   let systemPrompt = legacyPrompts[typeSlug] || getDefaultPrompt(typeName, typeDescription);
@@ -89,13 +90,20 @@ export async function generateArtifactContent(
     systemPrompt += `\n\nIMPORTANTE: Utilize o seguinte template/formato como referência para estruturar sua resposta:\n\n${templateContent}`;
   }
 
+  // Build user content with optional action instruction
+  let userContent = "";
+  if (action && action.trim()) {
+    userContent += `INSTRUÇÃO ESPECÍFICA: ${action.trim()}\n\n`;
+  }
+  userContent += `Analise a seguinte transcrição de reunião e extraia os ${typeName}:\n\n${transcription}`;
+
   const requestPayload = {
     model: "gpt-4o" as const,
     messages: [
       { role: "system" as const, content: systemPrompt },
       {
         role: "user" as const,
-        content: `Analise a seguinte transcrição de reunião e extraia os ${typeName}:\n\n${transcription}`,
+        content: userContent,
       },
     ],
     max_completion_tokens: 4096,
