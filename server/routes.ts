@@ -55,6 +55,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Client routes (for public registration flow)
+  app.get("/api/client/me", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const email = req.user.claims.email;
+      
+      // First try to find by userId, then by email
+      let client = await storage.getClientByUserId(userId);
+      if (!client && email) {
+        client = await storage.getClientByEmail(email);
+      }
+      
+      if (!client) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      
+      res.json(client);
+    } catch (error) {
+      console.error("Error fetching client:", error);
+      res.status(500).json({ message: "Erro ao buscar dados do cliente" });
+    }
+  });
+
+  const completeRegistrationSchema = z.object({
+    name: z.string().min(3),
+    cpf: z.string().min(11).max(14).transform(val => val.replace(/\D/g, "")),
+    cep: z.string().min(8).max(9).transform(val => val.replace(/\D/g, "")),
+    street: z.string().min(3),
+    number: z.string().min(1),
+    complement: z.string().optional(),
+    neighborhood: z.string().min(2),
+    city: z.string().min(2),
+    state: z.string().length(2),
+  });
+
+  app.put("/api/client/complete-registration", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const email = req.user.claims.email;
+      
+      // Validate input
+      const data = completeRegistrationSchema.parse(req.body);
+      
+      // Find client
+      let client = await storage.getClientByUserId(userId);
+      if (!client && email) {
+        client = await storage.getClientByEmail(email);
+      }
+      
+      if (!client) {
+        return res.status(404).json({ message: "Cliente não encontrado" });
+      }
+      
+      // Check if CPF is already used by another client
+      const existingCpf = await storage.getClientByCpf(data.cpf);
+      if (existingCpf && existingCpf.id !== client.id) {
+        return res.status(400).json({ message: "CPF já cadastrado por outro cliente" });
+      }
+      
+      // Update client with complete registration data
+      const updatedClient = await storage.updateClient(client.id, {
+        userId,
+        name: data.name,
+        cpf: data.cpf,
+        cep: data.cep,
+        street: data.street,
+        number: data.number,
+        complement: data.complement || null,
+        neighborhood: data.neighborhood,
+        city: data.city,
+        state: data.state,
+        registrationComplete: true,
+      });
+      
+      res.json(updatedClient);
+    } catch (error: any) {
+      console.error("Error completing registration:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ message: "Dados inválidos", errors: error.errors });
+      }
+      res.status(500).json({ message: "Erro ao completar cadastro" });
+    }
+  });
+
+  // CEP lookup route (ViaCEP API)
+  app.get("/api/cep/:cep", async (req, res) => {
+    try {
+      const cep = req.params.cep.replace(/\D/g, "");
+      
+      if (cep.length !== 8) {
+        return res.status(400).json({ message: "CEP deve ter 8 dígitos" });
+      }
+      
+      // Use https module for Node.js compatibility
+      const https = await import("https");
+      
+      const fetchViaCep = (): Promise<any> => {
+        return new Promise((resolve, reject) => {
+          https.default.get(`https://viacep.com.br/ws/${cep}/json/`, (response) => {
+            let data = "";
+            response.on("data", (chunk) => { data += chunk; });
+            response.on("end", () => {
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(new Error("Invalid JSON response"));
+              }
+            });
+          }).on("error", reject);
+        });
+      };
+      
+      const data = await fetchViaCep();
+      
+      // ViaCEP returns { erro: true } for invalid CEPs
+      if (data.erro) {
+        return res.status(404).json({ message: "CEP não encontrado" });
+      }
+      
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching CEP:", error);
+      res.status(500).json({ message: "Erro ao consultar CEP" });
+    }
+  });
+
   // Artifacts routes
   app.get("/api/artifacts", isAuthenticated, async (req: any, res) => {
     try {

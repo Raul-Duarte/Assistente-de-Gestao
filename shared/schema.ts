@@ -230,13 +230,29 @@ export type InsertArtifactType = z.infer<typeof insertArtifactTypeSchema>;
 // ==========================================
 
 // Clients table (separate from system users)
+// Clients are registered through public flow (OIDC login)
+// Users table is for admin-created operational users only
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Link to OIDC user ID for authentication
+  userId: varchar("user_id"),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 20 }),
-  cpf: varchar("cpf", { length: 14 }).notNull().unique(),
+  // CPF is nullable during initial registration, required after completion
+  cpf: varchar("cpf", { length: 14 }),
+  // Detailed address fields
+  cep: varchar("cep", { length: 9 }),
+  street: varchar("street", { length: 255 }),
+  number: varchar("number", { length: 20 }),
+  complement: varchar("complement", { length: 100 }),
+  neighborhood: varchar("neighborhood", { length: 100 }),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 2 }),
+  // Legacy address field (deprecated, kept for compatibility)
   address: text("address"),
+  // Registration status
+  registrationComplete: boolean("registration_complete").default(false),
   status: varchar("status", { length: 20 }).default("ativo").notNull(), // ativo, inadimplente
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

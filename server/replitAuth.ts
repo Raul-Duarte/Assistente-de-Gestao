@@ -50,36 +50,67 @@ function updateUserSession(
   user.expires_at = user.claims?.exp;
 }
 
-async function upsertUser(claims: any) {
-  await storage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
-  });
+// Check if user is an admin/operational user (created by admin in users table)
+async function isOperationalUser(claims: any): Promise<boolean> {
+  const user = await storage.getUser(claims["sub"]);
+  // Operational users have a profile assigned (admin creates them with profiles)
+  return user !== undefined && user !== null && user.profileId !== null;
 }
 
-async function createClientAndSubscription(claims: any, selectedPlanSlug?: string) {
+// Upsert user only for operational users (admin-created)
+async function upsertOperationalUser(claims: any) {
+  const existingUser = await storage.getUser(claims["sub"]);
+  if (existingUser && existingUser.profileId) {
+    // Update existing operational user
+    await storage.upsertUser({
+      id: claims["sub"],
+      email: claims["email"],
+      firstName: claims["first_name"],
+      lastName: claims["last_name"],
+      profileImageUrl: claims["profile_image_url"],
+    });
+  }
+}
+
+// Create or get client for public registration flow
+// Returns { client, isNew, registrationComplete }
+async function createOrGetClient(claims: any, selectedPlanSlug?: string): Promise<{ client: any; isNew: boolean; registrationComplete: boolean }> {
   const email = claims["email"];
-  if (!email) return;
+  const userId = claims["sub"];
+  
+  if (!email) {
+    throw new Error("Email is required for client registration");
+  }
 
-  // Check if client already exists
-  const existingClient = await storage.getClientByEmail(email);
-  if (existingClient) return;
+  // Check if client already exists by userId or email
+  let existingClient = await storage.getClientByUserId(userId);
+  if (!existingClient) {
+    existingClient = await storage.getClientByEmail(email);
+  }
+  
+  if (existingClient) {
+    // Update userId if not set
+    if (!existingClient.userId) {
+      await storage.updateClient(existingClient.id, { userId });
+    }
+    return { 
+      client: existingClient, 
+      isNew: false, 
+      registrationComplete: existingClient.registrationComplete || false 
+    };
+  }
 
-  // Get user record
-  const user = await storage.getUser(claims["sub"]);
-  if (!user) return;
-
-  // Create client record
+  // Create new client record with minimal data
+  // Full registration (name, CPF, address) will be completed in a separate step
   const clientName = `${claims["first_name"] || ""} ${claims["last_name"] || ""}`.trim() || email;
   const newClient = await storage.createClient({
+    userId,
     name: clientName,
     email: email,
-    cpf: `temp-${Date.now()}`, // Temporary CPF, user should update later
+    cpf: null, // Will be filled during registration completion
     phone: null,
     address: null,
+    registrationComplete: false,
   });
 
   // Find the selected plan or default to free
@@ -90,9 +121,6 @@ async function createClientAndSubscription(claims: any, selectedPlanSlug?: strin
   }
 
   if (selectedPlan) {
-    // Assign plan to user
-    await storage.updateUser(user.id, { planId: selectedPlan.id });
-
     // Create subscription for the client
     const now = new Date();
     const subscription = await storage.createSubscription({
@@ -114,6 +142,8 @@ async function createClientAndSubscription(claims: any, selectedPlanSlug?: strin
       referenceMonth,
     });
   }
+
+  return { client: newClient, isNew: true, registrationComplete: false };
 }
 
 export async function setupAuth(app: Express) {
@@ -130,7 +160,8 @@ export async function setupAuth(app: Express) {
   ) => {
     const user: any = {};
     updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
+    // User/Client creation is now handled in the callback handler
+    // to properly separate clients (public) from users (admin-created)
     verified(null, user);
   };
 
@@ -184,29 +215,64 @@ export async function setupAuth(app: Express) {
         delete (req.session as any).selectedPlanSlug;
       }
       
-      // Create client and subscription if this is a new user
       try {
-        await createClientAndSubscription(user.claims, selectedPlanSlug);
+        // Check if this is an operational user (admin-created)
+        const isOpUser = await isOperationalUser(user.claims);
+        
+        if (isOpUser) {
+          // Update operational user data
+          await upsertOperationalUser(user.claims);
+          req.logIn(user, (loginErr) => {
+            if (loginErr) return next(loginErr);
+            return res.redirect("/dashboard");
+          });
+        } else {
+          // Public registration flow - use clients table only
+          const { registrationComplete } = await createOrGetClient(user.claims, selectedPlanSlug);
+          
+          req.logIn(user, (loginErr) => {
+            if (loginErr) return next(loginErr);
+            // Redirect to complete registration if not done
+            if (!registrationComplete) {
+              return res.redirect("/completar-cadastro");
+            }
+            return res.redirect("/dashboard");
+          });
+        }
       } catch (error) {
-        console.error("Error creating client/subscription:", error);
+        console.error("Error in authentication callback:", error);
+        return res.redirect("/api/login");
       }
-      
-      req.logIn(user, (loginErr) => {
-        if (loginErr) return next(loginErr);
-        return res.redirect("/dashboard");
-      });
     })(req, res, next);
   });
 
+  // Logout endpoint - properly ends session and allows choosing different account
   app.get("/api/logout", (req, res) => {
+    const hostname = req.hostname;
+    
+    // Clear all session data and cookies
     req.logout(() => {
-      req.session?.destroy(() => {
-        res.redirect(
-          client.buildEndSessionUrl(config, {
-            client_id: process.env.REPL_ID!,
-            post_logout_redirect_uri: `https://${req.hostname}`,
-          }).href
-        );
+      // Destroy the session completely
+      req.session?.destroy((err) => {
+        if (err) {
+          console.error("Error destroying session:", err);
+        }
+        
+        // Clear the session cookie
+        res.clearCookie("connect.sid", {
+          path: "/",
+          httpOnly: true,
+          secure: true,
+        });
+        
+        // Redirect to OIDC end session endpoint with prompt to select account
+        // Using id_token_hint if available to properly end the session
+        const endSessionUrl = client.buildEndSessionUrl(config, {
+          client_id: process.env.REPL_ID!,
+          post_logout_redirect_uri: `https://${hostname}`,
+        });
+        
+        res.redirect(endSessionUrl.href);
       });
     });
   });

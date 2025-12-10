@@ -26,6 +26,7 @@ import AdminInvoices from "@/pages/admin/invoices";
 import AdminPayments from "@/pages/admin/payments";
 import AdminReports from "@/pages/admin/reports";
 import Perfil from "@/pages/perfil";
+import CompletarCadastro from "@/pages/completar-cadastro";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/admin/pagamentos" component={AdminPayments} />
       <Route path="/admin/relatorios" component={AdminReports} />
       <Route path="/perfil" component={Perfil} />
+      <Route path="/completar-cadastro" component={CompletarCadastro} />
       <Route component={NotFound} />
     </Switch>
   );
