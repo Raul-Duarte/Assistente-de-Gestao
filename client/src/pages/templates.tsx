@@ -318,17 +318,10 @@ export default function Templates() {
                       <RadioGroupItem value="text" id="type-text" data-testid="radio-type-text" />
                       <Label htmlFor="type-text" className="cursor-pointer">Texto</Label>
                     </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center space-x-2 opacity-50 cursor-not-allowed">
-                          <RadioGroupItem value="file" id="type-file" data-testid="radio-type-file" disabled />
-                          <Label htmlFor="type-file" className="cursor-not-allowed text-muted-foreground">Arquivo</Label>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Funcionalidade em desenvolvimento</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="file" id="type-file" data-testid="radio-type-file" />
+                      <Label htmlFor="type-file" className="cursor-pointer">Arquivo</Label>
+                    </div>
                   </RadioGroup>
                 </div>
 
