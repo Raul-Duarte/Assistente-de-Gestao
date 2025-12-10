@@ -97,6 +97,8 @@ export const artifactTypes = pgTable("artifact_types", {
   title: varchar("title", { length: 100 }).notNull(),
   description: text("description"),
   fileType: varchar("file_type", { length: 10 }).default("pdf").notNull(),
+  actionEnabled: boolean("action_enabled").default(false),
+  action: text("action"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });

@@ -59,6 +59,8 @@ export default function AdminArtifactTypes() {
     title: "",
     description: "",
     fileType: "pdf",
+    actionEnabled: false,
+    action: "",
     isActive: true,
   });
 
@@ -175,6 +177,8 @@ export default function AdminArtifactTypes() {
       title: "",
       description: "",
       fileType: "pdf",
+      actionEnabled: false,
+      action: "",
       isActive: true,
     });
   };
@@ -185,6 +189,8 @@ export default function AdminArtifactTypes() {
       title: type.title,
       description: type.description || "",
       fileType: type.fileType || "pdf",
+      actionEnabled: type.actionEnabled ?? false,
+      action: type.action || "",
       isActive: type.isActive ?? true,
     });
     setEditingType(type);
@@ -342,6 +348,27 @@ export default function AdminArtifactTypes() {
                   <p className="text-xs text-muted-foreground">
                     Formato de exportação quando nenhum template for selecionado
                   </p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="actionEnabled"
+                      checked={formData.actionEnabled ?? false}
+                      onCheckedChange={(checked) => setFormData({ ...formData, actionEnabled: checked, action: checked ? formData.action : "" })}
+                      data-testid="switch-action-enabled"
+                    />
+                    <Label htmlFor="actionEnabled">Ação</Label>
+                  </div>
+                  {formData.actionEnabled && (
+                    <Textarea
+                      id="action"
+                      value={formData.action || ""}
+                      onChange={(e) => setFormData({ ...formData, action: e.target.value })}
+                      placeholder="Para um melhor direcionamento inclua uma ação para melhorar a construção do artefato."
+                      rows={3}
+                      data-testid="input-type-action"
+                    />
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch

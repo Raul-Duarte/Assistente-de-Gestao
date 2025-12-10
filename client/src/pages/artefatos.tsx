@@ -78,8 +78,6 @@ export default function Artefatos() {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [actionEnabled, setActionEnabled] = useState(false);
-  const [actionText, setActionText] = useState("");
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const { data: artifactTypes = [], isLoading: typesLoading } = useQuery<ArtifactTypeRecord[]>({
@@ -319,7 +317,7 @@ export default function Artefatos() {
       types: selectedTypes, 
       transcription,
       templateId: selectedTemplateId || undefined,
-      action: actionEnabled ? actionText : undefined,
+      action: undefined,
     });
   };
 
@@ -509,45 +507,10 @@ export default function Artefatos() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div>
-                <CardTitle>3. Ação (Opcional)</CardTitle>
-                <CardDescription>
-                  Adicione uma instrução específica para direcionar a geração do artefato
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="action-switch"
-                  checked={actionEnabled}
-                  onCheckedChange={setActionEnabled}
-                  data-testid="switch-action"
-                />
-                <Label htmlFor="action-switch" className="text-sm">
-                  {actionEnabled ? "Ativado" : "Desativado"}
-                </Label>
-              </div>
-            </div>
-          </CardHeader>
-          {actionEnabled && (
-            <CardContent>
-              <Textarea
-                placeholder="Para um melhor direcionamento inclua uma ação para melhorar a construção do artefato."
-                value={actionText}
-                onChange={(e) => setActionText(e.target.value)}
-                className="min-h-[100px]"
-                data-testid="textarea-action"
-              />
-            </CardContent>
-          )}
-        </Card>
-
         {templates.length > 0 && selectedTypes.length <= 1 && (
           <Card>
             <CardHeader>
-              <CardTitle>4. Template (Opcional)</CardTitle>
+              <CardTitle>3. Template (Opcional)</CardTitle>
               <CardDescription>
                 Selecione um template para formatar o artefato gerado
               </CardDescription>

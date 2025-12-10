@@ -157,7 +157,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const typeDescription = artifactType?.description;
         const fileType = artifactType?.fileType || "pdf";
         
-        const content = await generateArtifactContent(typeSlug, typeName, transcription, typeDescription, templateContent, action);
+        // Use action from artifact type if enabled, otherwise use action from request
+        const typeAction = (artifactType?.actionEnabled && artifactType?.action) ? artifactType.action : action;
+        
+        const content = await generateArtifactContent(typeSlug, typeName, transcription, typeDescription, templateContent, typeAction);
         const now = new Date();
         const dateStr = now.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
         const timeStr = now.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).replace(":", "h");
