@@ -1,6 +1,16 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+
+  if (!apiKey || apiKey === "sk-local-placeholder") {
+    throw new Error(
+      "OPENAI_API_KEY não configurada. Defina uma chave válida no ambiente para gerar artefatos.",
+    );
+  }
+
+  return new OpenAI({ apiKey });
+}
 
 // Legacy prompts for backward compatibility with seeded types
 const legacyPrompts: Record<string, string> = {
@@ -82,6 +92,8 @@ export async function generateArtifactContent(
   templateContent?: string,
   action?: string
 ): Promise<string> {
+  const openai = getOpenAIClient();
+
   // Use legacy prompt if available, otherwise generate default
   let systemPrompt = legacyPrompts[typeSlug] || getDefaultPrompt(typeName, typeDescription);
 
@@ -123,6 +135,13 @@ export async function generateArtifactContent(
     return response.choices[0].message.content || `Não foi possível extrair ${typeName} da transcrição fornecida.`;
   } catch (error: any) {
     console.error(`Error generating artifact (${typeSlug}):`, error);
+
+    if (error?.status === 401) {
+      throw new Error(
+        `Falha ao gerar ${typeName}: OPENAI_API_KEY inválida. Configure uma chave válida no servidor.`,
+      );
+    }
+
     throw new Error(`Falha ao gerar ${typeName}: ${error.message}`);
   }
 }

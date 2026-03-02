@@ -12,7 +12,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Session storage table for Replit Auth
+// Session storage table for local session auth
 export const sessions = pgTable(
   "sessions",
   {
@@ -49,7 +49,7 @@ export const plans = pgTable("plans", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Users table with Replit Auth integration
+// Users table with local auth integration
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
@@ -230,11 +230,11 @@ export type InsertArtifactType = z.infer<typeof insertArtifactTypeSchema>;
 // ==========================================
 
 // Clients table (separate from system users)
-// Clients are registered through public flow (OIDC login)
+// Clients are registered through the public app flow
 // Users table is for admin-created operational users only
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  // Link to OIDC user ID for authentication
+  // Link to authenticated user ID
   userId: varchar("user_id"),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull(),

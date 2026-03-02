@@ -109,7 +109,7 @@ export default function Landing() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <Button size="lg" asChild data-testid="button-cta-start">
-                <a href="/api/login">
+                <a href="/login">
                   Começar Grátis
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </a>
@@ -245,7 +245,7 @@ export default function Landing() {
                       variant={plan.highlighted ? "default" : "outline"}
                       asChild
                     >
-                      <a href="/api/login">Começar</a>
+                      <a href="/login">Começar</a>
                     </Button>
                   </CardContent>
                 </Card>
@@ -305,7 +305,7 @@ export default function Landing() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" variant="secondary" asChild>
-                <a href="/api/login">
+                <a href="/login">
                   Criar Conta Grátis
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </a>

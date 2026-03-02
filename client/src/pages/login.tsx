@@ -1,21 +1,42 @@
-import { useEffect } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Sparkles, Shield, Zap, ArrowRight } from "lucide-react";
-import { SiGoogle, SiGithub } from "react-icons/si";
+import { Sparkles, Shield, Zap } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Login() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       window.location.href = "/dashboard";
     }
   }, [isAuthenticated, isLoading]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      await apiRequest("POST", "/api/auth/login", { email, password });
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      window.location.href = "/dashboard";
+    } catch (err: any) {
+      setError(err?.message?.replace(/^401:\s*/, "") || "Falha ao autenticar");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -39,58 +60,54 @@ export default function Login() {
             <CardHeader className="text-center">
               <CardTitle>Entrar</CardTitle>
               <CardDescription>
-                Escolha como deseja acessar sua conta
+                Acesse com credenciais locais
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button
-                className="w-full"
-                size="lg"
-                asChild
-                data-testid="button-login-google"
-              >
-                <a href="/api/login">
-                  <SiGoogle className="mr-2 h-4 w-4" />
-                  Continuar com Google
-                </a>
-              </Button>
-
-              <Button
-                className="w-full"
-                size="lg"
-                variant="outline"
-                asChild
-                data-testid="button-login-github"
-              >
-                <a href="/api/login">
-                  <SiGithub className="mr-2 h-4 w-4" />
-                  Continuar com GitHub
-                </a>
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="admin@local.dev"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    autoComplete="email"
+                    required
+                    data-testid="input-login-email"
+                  />
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    ou
-                  </span>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Digite sua senha"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete="current-password"
+                    required
+                    data-testid="input-login-password"
+                  />
                 </div>
-              </div>
 
-              <Button
-                className="w-full"
-                size="lg"
-                variant="secondary"
-                asChild
-                data-testid="button-login-replit"
-              >
-                <a href="/api/login">
-                  Continuar com Replit
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </a>
-              </Button>
+                {error ? (
+                  <p className="text-sm text-destructive" data-testid="text-login-error">
+                    {error}
+                  </p>
+                ) : null}
+
+                <Button
+                  className="w-full"
+                  size="lg"
+                  type="submit"
+                  disabled={isSubmitting}
+                  data-testid="button-login-submit"
+                >
+                  {isSubmitting ? "Entrando..." : "Entrar"}
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
@@ -107,14 +124,7 @@ export default function Login() {
 
           <div className="mt-8 text-center">
             <p className="text-sm text-muted-foreground">
-              Ainda não tem uma conta?{" "}
-              <a
-                href="/api/login"
-                className="text-primary hover:underline font-medium"
-                data-testid="link-signup"
-              >
-                Criar conta grátis
-              </a>
+              Credenciais são definidas via variáveis locais do servidor.
             </p>
           </div>
         </div>

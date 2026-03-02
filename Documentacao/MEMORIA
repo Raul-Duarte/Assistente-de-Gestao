@@ -1,0 +1,59 @@
+# MEMÓRIA DO PROJETO
+
+Projeto: Assistente-de-Gestao
+Data de atualização: 2026-03-02
+Stack: Node.js + Express + Vite + React + Postgres + Drizzle ORM
+Branch: main
+
+## Estado atual consolidado
+- Removido o fluxo Replit/OIDC de autenticação.
+- Implementada autenticação local por sessão em `server/auth.ts`.
+- Login frontend migrado para formulário local (`/login`) com `POST /api/auth/login`.
+- Rota `/api/login` agora apenas redireciona para `/login`.
+- Logout local disponível em `/api/logout` e `/api/auth/logout`.
+- Removidos arquivos legados e referências Replit:
+  - `.replit` (removido)
+  - `replit.md` (removido)
+  - `server/replitAuth.ts` (removido)
+  - plugins `@replit/*` removidos do Vite e `package.json`
+  - `openid-client` e `passport*` removidos das dependências
+- `vite.config.ts` simplificado, sem plugins Replit.
+- `script/build.ts` atualizado removendo `passport` da allowlist.
+
+## Variáveis de ambiente locais
+Arquivo de referência: `.env.example`
+Arquivo local em uso: `.env` (ignorado no git)
+
+Variáveis principais:
+- `DATABASE_URL`
+- `OPENAI_API_KEY`
+- `SESSION_SECRET`
+- `LOCAL_AUTH_EMAIL`
+- `LOCAL_AUTH_PASSWORD`
+- `LOCAL_AUTH_FIRST_NAME`
+- `LOCAL_AUTH_LAST_NAME`
+- `PORT`
+
+## OpenAI
+- Modelo atual para geração: `gpt-4o` (em `server/openai.ts`).
+- Validação adicionada para impedir uso de placeholder de chave.
+- Mensagem de erro melhorada para `OPENAI_API_KEY` ausente/inválida.
+
+## Execução local (resumo)
+1. Subir banco Postgres local (ex.: Docker em `localhost:5433`).
+2. Carregar ambiente e iniciar app:
+   - `set -a && source .env && set +a && npm run dev`
+3. Acesso local padrão:
+   - app: `http://localhost:5001` (ou porta definida em `PORT`)
+
+## Build/validação recente
+- `npm run build`: OK (cliente e servidor gerados em `dist/`).
+- Observação: `npm run check` ainda possui erros TypeScript pré-existentes em telas/admin e storage (não bloqueou build).
+
+## Credenciais locais padrão (se não sobrescrever no .env)
+- Email: `admin@local.dev`
+- Senha: `admin123`
+
+## Próximos pontos úteis
+- Corrigir erros de TypeScript pendentes para estabilizar `npm run check`.
+- Revisar divisão de chunks do frontend (bundle principal > 500kb).

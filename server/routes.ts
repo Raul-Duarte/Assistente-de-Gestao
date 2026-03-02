@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import { generateArtifactContent } from "./openai";
 import { insertProfileSchema, insertPlanSchema, createManualUserSchema, ARTIFACT_TYPES } from "@shared/schema";
 import { z } from "zod";
@@ -26,10 +26,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const email = req.user.claims.email;
       
-      // First check if this is an operational user (admin-created)
+      // Return system user when found
       const user = await storage.getUser(userId);
-      if (user && user.profileId) {
-        // Return operational user data
+      if (user) {
         return res.json(user);
       }
       

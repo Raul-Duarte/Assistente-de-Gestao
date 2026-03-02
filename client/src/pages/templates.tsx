@@ -121,7 +121,7 @@ export default function Templates() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "/login";
         }, 1500);
         return;
       }
@@ -149,7 +149,7 @@ export default function Templates() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "/login";
         }, 1500);
         return;
       }

@@ -150,7 +150,7 @@ export default function Tools() {
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   ) : (
-                    <a href="/api/login">
+                    <a href="/login">
                       Fazer Login
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </a>
