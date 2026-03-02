@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./auth";
-import { generateArtifactContent } from "./openai";
+import { storage } from "../system/storage";
+import { setupAuth, isAuthenticated } from "../auth/auth";
+import { generateArtifactContent } from "../artifacts/openai";
 import { insertProfileSchema, insertPlanSchema, createManualUserSchema, ARTIFACT_TYPES } from "@shared/schema";
 import { z } from "zod";
 import PDFDocument from "pdfkit";
@@ -15,10 +15,18 @@ import {
   fillTemplate,
   validatePlaceholderMapping,
   type PlaceholderData 
-} from "./template-processor";
+} from "../templates/template-processor";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
+
+  app.get("/api/health", (_req, res) => {
+    res.json({
+      status: "ok",
+      uptimeSeconds: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   // Auth routes
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {

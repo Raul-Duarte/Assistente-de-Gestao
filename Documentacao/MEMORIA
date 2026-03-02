@@ -19,6 +19,32 @@ Branch: main
   - `openid-client` e `passport*` removidos das dependências
 - `vite.config.ts` simplificado, sem plugins Replit.
 - `script/build.ts` atualizado removendo `passport` da allowlist.
+- Configuração de ambiente centralizada em `server/core/config.ts`.
+- Backend reorganizado por módulos/contextos em `server/`:
+  - `core/` (config/db)
+  - `app/` (static/vite)
+  - `modules/auth`
+  - `modules/artifacts`
+  - `modules/templates`
+  - `modules/system`
+  - `modules/http`
+- Runtime mais robusto em `server/index.ts`:
+  - shutdown gracioso (`SIGTERM`/`SIGINT`)
+  - logs de API com truncamento seguro
+  - middleware de erro sem crash explícito do processo
+- Healthcheck público adicionado: `GET /api/health`.
+- Regra de segurança aplicada:
+  - `admin@local.dev` sempre recebe perfil `Administrador` no login.
+- Dockerização profissional adicionada:
+  - `Dockerfile` (backend, multi-stage) + `Dockerfile.front` (frontend em Nginx)
+  - `docker-compose.yml` com serviços `back`, `front`, `db` e profile `migrate`
+  - nomes padronizados de container:
+    - `assistente_gestao_back`
+    - `assistente_gestao_front`
+    - `assistente_gestao_db`
+  - `.dockerignore`
+  - `Documentacao/DOCKER.md`
+  - `Documentacao/ARQUITETURA.md`
 
 ## Variáveis de ambiente locais
 Arquivo de referência: `.env.example`
@@ -27,12 +53,20 @@ Arquivo local em uso: `.env` (ignorado no git)
 Variáveis principais:
 - `DATABASE_URL`
 - `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_DEBUG_LOGS`
 - `SESSION_SECRET`
-- `LOCAL_AUTH_EMAIL`
-- `LOCAL_AUTH_PASSWORD`
-- `LOCAL_AUTH_FIRST_NAME`
-- `LOCAL_AUTH_LAST_NAME`
+- `AUTH_LOCAL_EMAIL` (compatível com legado `LOCAL_AUTH_EMAIL`)
+- `AUTH_LOCAL_PASSWORD` (compatível com legado `LOCAL_AUTH_PASSWORD`)
+- `AUTH_LOCAL_FIRST_NAME` (compatível com legado `LOCAL_AUTH_FIRST_NAME`)
+- `AUTH_LOCAL_LAST_NAME` (compatível com legado `LOCAL_AUTH_LAST_NAME`)
+- `AUTH_SESSION_TTL_DAYS`
 - `PORT`
+- `APP_PORT`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `DB_PORT`
 
 ## OpenAI
 - Modelo atual para geração: `gpt-4o` (em `server/openai.ts`).
@@ -45,6 +79,16 @@ Variáveis principais:
    - `set -a && source .env && set +a && npm run dev`
 3. Acesso local padrão:
    - app: `http://localhost:5001` (ou porta definida em `PORT`)
+
+## Execução via Docker (resumo)
+1. Subir stack:
+   - `docker compose up --build -d`
+2. Aplicar schema (primeira execução):
+   - `docker compose --profile migrate run --rm migrate`
+3. Acessar aplicação:
+   - `http://localhost:5001` (`APP_PORT`)
+4. Logs:
+   - `docker compose logs -f api postgresql`
 
 ## Build/validação recente
 - `npm run build`: OK (cliente e servidor gerados em `dist/`).

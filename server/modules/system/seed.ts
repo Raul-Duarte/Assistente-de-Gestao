@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db } from "../../core/db";
 import { profiles, plans, artifactTypes } from "@shared/schema";
 import { ARTIFACT_TYPES } from "@shared/schema";
 

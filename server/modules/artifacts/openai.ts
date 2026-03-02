@@ -1,7 +1,8 @@
 import OpenAI from "openai";
+import { appConfig } from "../../core/config";
 
 function getOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const apiKey = appConfig.openAiApiKey;
 
   if (!apiKey || apiKey === "sk-local-placeholder") {
     throw new Error(
@@ -10,6 +11,16 @@ function getOpenAIClient(): OpenAI {
   }
 
   return new OpenAI({ apiKey });
+}
+
+function logOpenAIInteraction(tag: string, payload: Record<string, unknown>) {
+  if (!appConfig.openAiDebugLogs) {
+    return;
+  }
+
+  console.log(`\n========== ${tag} ==========`);
+  console.log(JSON.stringify(payload, null, 2));
+  console.log(`========== END ${tag} ==========\n`);
 }
 
 // Legacy prompts for backward compatibility with seeded types
@@ -110,7 +121,7 @@ export async function generateArtifactContent(
   userContent += `Analise a seguinte transcrição de reunião e extraia os ${typeName}:\n\n${transcription}`;
 
   const requestPayload = {
-    model: "gpt-4o" as const,
+    model: appConfig.openAiModel,
     messages: [
       { role: "system" as const, content: systemPrompt },
       {
@@ -121,16 +132,23 @@ export async function generateArtifactContent(
     max_completion_tokens: 4096,
   };
 
-  console.log(`\n========== OPENAI REQUEST (${typeSlug}) ==========`);
-  console.log(JSON.stringify(requestPayload, null, 2));
-  console.log(`========== END REQUEST ==========\n`);
+  logOpenAIInteraction(`OPENAI REQUEST (${typeSlug})`, {
+    model: requestPayload.model,
+    promptSize: systemPrompt.length,
+    inputSize: userContent.length,
+    hasTemplate: Boolean(templateContent),
+    hasAction: Boolean(action?.trim()),
+  });
 
   try {
     const response = await openai.chat.completions.create(requestPayload);
 
-    console.log(`\n========== OPENAI RESPONSE (${typeSlug}) ==========`);
-    console.log(JSON.stringify(response, null, 2));
-    console.log(`========== END RESPONSE ==========\n`);
+    logOpenAIInteraction(`OPENAI RESPONSE (${typeSlug})`, {
+      id: response.id,
+      model: response.model,
+      choices: response.choices.length,
+      usage: response.usage,
+    });
 
     return response.choices[0].message.content || `Não foi possível extrair ${typeName} da transcrição fornecida.`;
   } catch (error: any) {

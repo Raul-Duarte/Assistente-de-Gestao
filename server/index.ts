@@ -1,7 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
-import { seedDatabase } from "./seed";
+import { registerRoutes } from "./modules/http/routes";
+import { serveStatic } from "./app/static";
+import { seedDatabase } from "./modules/system/seed";
+import { pool } from "./core/db";
+import { appConfig } from "./core/config";
 
 const app = express();
 
@@ -33,6 +35,18 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+function serializeForLog(payload: unknown, maxLength = 512): string {
+  try {
+    const serialized = JSON.stringify(payload);
+    if (serialized.length <= maxLength) {
+      return serialized;
+    }
+    return `${serialized.slice(0, maxLength)}...<truncated>`;
+  } catch {
+    return "[unserializable payload]";
+  }
+}
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -49,7 +63,7 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        logLine += ` :: ${serializeForLog(capturedJsonResponse)}`;
       }
 
       log(logLine);
@@ -74,16 +88,16 @@ app.use((req, res, next) => {
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    console.error("Unhandled application error:", err);
   });
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production") {
+  if (appConfig.nodeEnv === "production" && appConfig.serveStatic) {
     serveStatic(app);
-  } else {
-    const { setupVite } = await import("./vite");
+  } else if (appConfig.nodeEnv !== "production") {
+    const { setupVite } = await import("./app/vite");
     await setupVite(httpServer, app);
   }
 
@@ -91,7 +105,7 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = appConfig.port;
   httpServer.listen(
     {
       port,
@@ -101,4 +115,26 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
     },
   );
+
+  const gracefulShutdown = (signal: string) => {
+    log(`received ${signal}, shutting down gracefully`, "server");
+    httpServer.close(async () => {
+      try {
+        await pool.end();
+        log("database pool closed", "server");
+      } catch (error) {
+        console.error("failed to close database pool:", error);
+      } finally {
+        process.exit(0);
+      }
+    });
+
+    setTimeout(() => {
+      log("forced shutdown after timeout", "server");
+      process.exit(1);
+    }, 10_000).unref();
+  };
+
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 })();

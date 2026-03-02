@@ -30,7 +30,7 @@ import {
   type Payment,
   type InsertPayment,
 } from "@shared/schema";
-import { db } from "./db";
+import { db } from "../../core/db";
 import { eq, desc, and, lt, sql } from "drizzle-orm";
 
 export interface IStorage {
@@ -47,6 +47,7 @@ export interface IStorage {
   // Profile operations
   getProfiles(): Promise<Profile[]>;
   getProfile(id: string): Promise<Profile | undefined>;
+  getProfileByName(name: string): Promise<Profile | undefined>;
   createProfile(data: InsertProfile): Promise<Profile>;
   updateProfile(id: string, data: Partial<InsertProfile>): Promise<Profile>;
   deleteProfile(id: string): Promise<void>;
@@ -220,6 +221,11 @@ export class DatabaseStorage implements IStorage {
 
   async getProfile(id: string): Promise<Profile | undefined> {
     const [profile] = await db.select().from(profiles).where(eq(profiles.id, id));
+    return profile;
+  }
+
+  async getProfileByName(name: string): Promise<Profile | undefined> {
+    const [profile] = await db.select().from(profiles).where(eq(profiles.name, name));
     return profile;
   }
 

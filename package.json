@@ -8,7 +8,11 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f back front db",
+    "docker:migrate": "docker compose --profile migrate run --rm migrate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -105,8 +109,5 @@
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
     "vite": "^5.4.20"
-  },
-  "optionalDependencies": {
-    "bufferutil": "^4.0.8"
   }
 }

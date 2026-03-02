@@ -1,7 +1,8 @@
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
-import { storage } from "./storage";
+import { storage } from "../system/storage";
+import { appConfig } from "../../core/config";
 
 type SessionClaims = {
   sub: string;
@@ -23,38 +24,69 @@ declare module "express-session" {
   }
 }
 
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-function getLocalAuthConfig() {
-  return {
-    email: process.env.LOCAL_AUTH_EMAIL ?? "admin@local.dev",
-    password: process.env.LOCAL_AUTH_PASSWORD ?? "admin123",
-    firstName: process.env.LOCAL_AUTH_FIRST_NAME ?? "Admin",
-    lastName: process.env.LOCAL_AUTH_LAST_NAME ?? "Local",
-  };
-}
+const LOCAL_ADMIN_EMAIL = "admin@local.dev";
+const ADMIN_PROFILE_NAME = "Administrador";
+const ADMIN_PROFILE_PERMISSIONS = [
+  "users.view",
+  "users.edit",
+  "users.delete",
+  "profiles.view",
+  "profiles.edit",
+  "plans.view",
+  "plans.edit",
+  "artifacts.generate",
+  "artifacts.export",
+];
+const sessionTtlMs = Math.max(1, appConfig.sessionTtlDays) * 24 * 60 * 60 * 1000;
 
 export function getSession() {
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
+    conString: appConfig.databaseUrl,
     createTableIfMissing: true,
-    ttl: SESSION_TTL_MS,
+    ttl: sessionTtlMs,
     tableName: "sessions",
   });
 
   return session({
-    secret: process.env.SESSION_SECRET ?? "local-dev-session-secret",
+    secret: appConfig.sessionSecret,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: appConfig.sessionCookieSecure,
       sameSite: "lax",
-      maxAge: SESSION_TTL_MS,
+      maxAge: sessionTtlMs,
     },
   });
+}
+
+async function ensureAdminProfile() {
+  let adminProfile = await storage.getProfileByName(ADMIN_PROFILE_NAME);
+  if (!adminProfile) {
+    adminProfile = await storage.createProfile({
+      name: ADMIN_PROFILE_NAME,
+      description: "Acesso completo ao sistema.",
+      permissions: ADMIN_PROFILE_PERMISSIONS,
+      isSystem: true,
+    });
+  }
+
+  return adminProfile;
+}
+
+async function ensureLocalAdminPrivileges(userId: string, email: string) {
+  if (email.trim().toLowerCase() !== LOCAL_ADMIN_EMAIL) {
+    return;
+  }
+
+  const adminProfile = await ensureAdminProfile();
+  const currentUser = await storage.getUser(userId);
+
+  if (!currentUser || currentUser.profileId !== adminProfile.id) {
+    await storage.updateUser(userId, { profileId: adminProfile.id });
+  }
 }
 
 export async function setupAuth(app: Express) {
@@ -75,27 +107,37 @@ export async function setupAuth(app: Express) {
 
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body ?? {};
-    const localAuth = getLocalAuthConfig();
+    const localAuthCredentials = {
+      email: appConfig.authLocalEmail,
+      password: appConfig.authLocalPassword,
+      firstName: appConfig.authLocalFirstName,
+      lastName: appConfig.authLocalLastName,
+    };
+    const normalizedEmail = String(email ?? "").trim().toLowerCase();
+    const expectedEmail = localAuthCredentials.email.toLowerCase();
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ message: "Email e senha são obrigatórios" });
     }
 
-    if (email !== localAuth.email || password !== localAuth.password) {
+    if (normalizedEmail !== expectedEmail || password !== localAuthCredentials.password) {
       return res.status(401).json({ message: "Credenciais inválidas" });
     }
 
-    let user = await storage.getUserByEmail(email);
+    let user = await storage.getUserByEmail(normalizedEmail);
 
     if (!user) {
       user = await storage.createManualUser({
-        email,
-        firstName: localAuth.firstName,
-        lastName: localAuth.lastName,
+        email: normalizedEmail,
+        firstName: localAuthCredentials.firstName,
+        lastName: localAuthCredentials.lastName,
       });
     }
 
-    const expiresAt = Math.floor((Date.now() + SESSION_TTL_MS) / 1000);
+    await ensureLocalAdminPrivileges(user.id, normalizedEmail);
+    user = (await storage.getUser(user.id)) ?? user;
+
+    const expiresAt = Math.floor((Date.now() + sessionTtlMs) / 1000);
     const sessionUser: SessionUser = {
       claims: {
         sub: user.id,
@@ -126,7 +168,7 @@ export async function setupAuth(app: Express) {
       res.clearCookie("connect.sid", {
         path: "/",
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: appConfig.sessionCookieSecure,
         sameSite: "lax",
       });
       return res.redirect("/login");
